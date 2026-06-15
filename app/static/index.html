@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0d12" />
+  <title>Insta Post Auto</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand-title">📸 Insta&nbsp;Post&nbsp;Auto</div>
+    <select id="brandSelect" class="brand-select" aria-label="Marque active"></select>
+  </header>
+
+  <main id="view" class="view"></main>
+
+  <nav class="tabbar" role="tablist">
+    <button class="tab" data-tab="brands">🏷️<span>Marque</span></button>
+    <button class="tab" data-tab="products">📦<span>Produits</span></button>
+    <button class="tab active" data-tab="generate">✨<span>Générer</span></button>
+    <button class="tab" data-tab="library">🗂️<span>Biblio</span></button>
+    <button class="tab" data-tab="schedule">📅<span>Planning</span></button>
+  </nav>
+
+  <div id="toast" class="toast" hidden></div>
+  <div id="loader" class="loader" hidden><div class="spinner"></div><span id="loaderText">Chargement…</span></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
