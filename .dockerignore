@@ -1,0 +1,9 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+data/
+app/static/media/*
+!app/static/media/.gitkeep
+.git/

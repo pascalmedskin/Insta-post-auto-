@@ -1,0 +1,38 @@
+# Déploiement Render (offre gratuite) — donne une URL publique HTTPS
+# que tu peux ouvrir directement depuis ton iPhone.
+#
+# Étapes (depuis le navigateur, même sur téléphone) :
+#   1. Va sur https://render.com → connecte ton compte GitHub
+#   2. New +  →  Blueprint  →  choisis ce repo et la branche
+#      claude/instagram-content-auto-post-szi3a3
+#   3. Render lit ce fichier et crée le service automatiquement
+#   4. (Optionnel) renseigne les clés API dans l'onglet Environment
+#
+# Sans clés API, l'app démarre en mode démo : parfait pour tester l'UI.
+services:
+  - type: web
+    name: insta-post-auto
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.4"
+      - key: AUTOPOST_ENABLED
+        value: "true"
+      - key: SCHEDULER_TIMEZONE
+        value: "Europe/Zurich"
+      # PUBLIC_BASE_URL : à mettre = l'URL Render après le 1er déploiement
+      # (ex : https://insta-post-auto.onrender.com). Requis pour publier sur IG.
+      - key: PUBLIC_BASE_URL
+        sync: false
+      # Clés à renseigner pour la vraie génération / publication (sinon démo) :
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: IG_ACCESS_TOKEN
+        sync: false
+      - key: IG_BUSINESS_ACCOUNT_ID
+        sync: false
