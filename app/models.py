@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import enum
 from datetime import datetime, timezone
+from typing import List, Optional
 
 from sqlalchemy import (
     JSON,
@@ -43,26 +44,35 @@ class Brand(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     # Identité visuelle
-    logo_path: Mapped[str | None] = mapped_column(String(500))  # logo principal
-    logos: Mapped[list | None] = mapped_column(JSON, default=list)  # tous les logos PNG
-    brand_image_path: Mapped[str | None] = mapped_column(String(500))
-    guidelines_pdf_path: Mapped[str | None] = mapped_column(String(500))
+    logo_path: Mapped[Optional[str]] = mapped_column(String(500))
+    logos: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    brand_image_path: Mapped[Optional[str]] = mapped_column(String(500))
+    guidelines_pdf_path: Mapped[Optional[str]] = mapped_column(String(500))
     primary_color: Mapped[str] = mapped_column(String(20), default="#111111")
     secondary_color: Mapped[str] = mapped_column(String(20), default="#FFFFFF")
     accent_color: Mapped[str] = mapped_column(String(20), default="#FF4D6D")
     font_family: Mapped[str] = mapped_column(String(120), default="DejaVu Sans")
+    font_body: Mapped[str] = mapped_column(String(120), default="")
     # Charte / ligne éditoriale
+    languages: Mapped[Optional[list]] = mapped_column(JSON, default=lambda: ["fr"])
+    website_url: Mapped[Optional[str]] = mapped_column(String(500))
+    products_url: Mapped[Optional[str]] = mapped_column(String(500))
     guidelines: Mapped[str] = mapped_column(Text, default="")
     tone_of_voice: Mapped[str] = mapped_column(String(300), default="")
     target_audience: Mapped[str] = mapped_column(String(300), default="")
     default_hashtags: Mapped[str] = mapped_column(Text, default="")
 
+    # Instagram connection (per-brand, via OAuth)
+    ig_access_token: Mapped[Optional[str]] = mapped_column(String(500), default="")
+    ig_user_id: Mapped[Optional[str]] = mapped_column(String(120), default="")
+    ig_username: Mapped[Optional[str]] = mapped_column(String(120), default="")
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
-    contents: Mapped[list[ContentItem]] = relationship(
+    contents: Mapped[List[ContentItem]] = relationship(
         back_populates="brand", cascade="all, delete-orphan"
     )
-    products: Mapped[list[Product]] = relationship(
+    products: Mapped[List[Product]] = relationship(
         back_populates="brand", cascade="all, delete-orphan"
     )
 
@@ -77,10 +87,13 @@ class Product(Base):
     brand_id: Mapped[int] = mapped_column(ForeignKey("brands.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="")
-    image_path: Mapped[str | None] = mapped_column(String(500))
-    # Dimensions réelles, en millimètres (pour respecter le ratio L/H).
-    width_mm: Mapped[float | None] = mapped_column()
-    height_mm: Mapped[float | None] = mapped_column()
+    descriptions: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
+    product_url: Mapped[Optional[str]] = mapped_column(String(500))
+    image_path: Mapped[Optional[str]] = mapped_column(String(500))
+    images: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    width_mm: Mapped[Optional[float]] = mapped_column()
+    height_mm: Mapped[Optional[float]] = mapped_column()
+    depth_mm: Mapped[Optional[float]] = mapped_column()
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
@@ -93,7 +106,7 @@ class ContentItem(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     brand_id: Mapped[int] = mapped_column(ForeignKey("brands.id"), nullable=False)
     # Produit optionnel à mettre en scène (mockup).
-    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"))
+    product_id: Mapped[Optional[int]] = mapped_column(ForeignKey("products.id"))
 
     format: Mapped[ContentFormat] = mapped_column(
         Enum(ContentFormat), default=ContentFormat.POST
@@ -111,19 +124,19 @@ class ContentItem(Base):
     caption: Mapped[str] = mapped_column(Text, default="")
     hashtags: Mapped[str] = mapped_column(Text, default="")
     # Pour carousels/stories : liste de slides [{"headline":..., "body":...}]
-    slides: Mapped[list | None] = mapped_column(JSON, default=list)
+    slides: Mapped[Optional[list]] = mapped_column(JSON, default=list)
 
     # Visuels : chemins relatifs dans static/media (1+ images)
-    image_paths: Mapped[list | None] = mapped_column(JSON, default=list)
+    image_paths: Mapped[Optional[list]] = mapped_column(JSON, default=list)
 
-    ig_media_id: Mapped[str | None] = mapped_column(String(120))
-    error: Mapped[str | None] = mapped_column(Text)
+    ig_media_id: Mapped[Optional[str]] = mapped_column(String(120))
+    error: Mapped[Optional[str]] = mapped_column(Text)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     brand: Mapped[Brand] = relationship(back_populates="contents")
-    product: Mapped[Product | None] = relationship()
-    schedule: Mapped[ScheduledPost | None] = relationship(
+    product: Mapped[Optional[Product]] = relationship()
+    schedule: Mapped[Optional[ScheduledPost]] = relationship(
         back_populates="content", cascade="all, delete-orphan", uselist=False
     )
 
@@ -137,7 +150,7 @@ class ScheduledPost(Base):
     )
     # Heure de publication (UTC stocké, affiché dans le tz du scheduler)
     scheduled_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    published_at: Mapped[datetime | None] = mapped_column(DateTime)
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
 
     content: Mapped[ContentItem] = relationship(back_populates="schedule")

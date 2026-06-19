@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta, timezone
+from typing import Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -88,7 +89,7 @@ def auto_schedule(req: AutoScheduleRequest, db: Session = Depends(get_db)):
 
 
 @router.get("", response_model=list[ScheduleOut])
-def list_schedule(brand_id: int | None = None, db: Session = Depends(get_db)):
+def list_schedule(brand_id: Optional[int] = None, db: Session = Depends(get_db)):
     q = db.query(ScheduledPost).join(ContentItem)
     if brand_id is not None:
         q = q.filter(ContentItem.brand_id == brand_id)

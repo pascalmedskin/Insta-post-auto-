@@ -26,10 +26,14 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     image_model: str = "gpt-image-1"
 
-    # Instagram Graph API
+    # Instagram Graph API (legacy .env config, overridden by per-brand OAuth)
     ig_access_token: str = ""
     ig_business_account_id: str = ""
     ig_graph_version: str = "v21.0"
+
+    # Meta / Facebook OAuth (for Instagram connection)
+    meta_app_id: str = ""
+    meta_app_secret: str = ""
 
     # Scheduler
     scheduler_timezone: str = "Europe/Zurich"
@@ -48,6 +52,10 @@ class Settings(BaseSettings):
     @property
     def has_instagram(self) -> bool:
         return bool(self.ig_access_token and self.ig_business_account_id)
+
+    @property
+    def has_meta_oauth(self) -> bool:
+        return bool(self.meta_app_id and self.meta_app_secret)
 
 
 @lru_cache

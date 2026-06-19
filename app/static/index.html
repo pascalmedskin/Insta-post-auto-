@@ -3,29 +3,93 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#0d0d12" />
+  <meta name="theme-color" content="#000000" />
   <title>Insta Post Auto</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=17" />
 </head>
 <body>
   <header class="topbar">
-    <div class="brand-title">📸 Insta&nbsp;Post&nbsp;Auto</div>
-    <select id="brandSelect" class="brand-select" aria-label="Marque active"></select>
+    <button class="handle-btn" id="handleBtn">
+      <div class="handle-avatar" id="handleAvatar"></div>
+      <span class="handle-name" id="handleName">Insta Post Auto</span>
+      <svg class="handle-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div class="topbar-actions">
+      <button class="topbar-icon-btn" id="newContentBtn" title="Créer">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      </button>
+      <button class="topbar-icon-btn" id="menuBtn" title="Menu">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
   </header>
+
+  <!-- Account switcher dropdown -->
+  <div class="account-dropdown" id="accountDropdown" hidden>
+    <div id="accountList"></div>
+    <button class="account-add" id="accountAdd">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      Ajouter une marque
+    </button>
+  </div>
+  <div class="account-dropdown-overlay" id="accountOverlay" hidden></div>
+
+  <div class="drawer-overlay" id="drawerOverlay" hidden></div>
+  <aside class="drawer" id="drawer" hidden>
+    <div class="drawer-header">
+      <div class="drawer-avatar" id="drawerAvatar"></div>
+      <div class="drawer-brand-info">
+        <span class="drawer-brand-name" id="drawerBrandName"></span>
+        <span class="drawer-brand-url" id="drawerBrandUrl"></span>
+      </div>
+      <button class="drawer-close" id="drawerClose">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <nav class="drawer-nav" id="drawerNav"></nav>
+  </aside>
 
   <main id="view" class="view"></main>
 
   <nav class="tabbar" role="tablist">
-    <button class="tab" data-tab="brands">🏷️<span>Marque</span></button>
-    <button class="tab" data-tab="products">📦<span>Produits</span></button>
-    <button class="tab active" data-tab="generate">✨<span>Générer</span></button>
-    <button class="tab" data-tab="library">🗂️<span>Biblio</span></button>
-    <button class="tab" data-tab="schedule">📅<span>Planning</span></button>
+    <button class="tab active" data-tab="home">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+      <span>Accueil</span>
+    </button>
+    <button class="tab" data-tab="generate">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      <span>Créer</span>
+    </button>
+    <button class="tab" data-tab="schedule">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span>Planning</span>
+    </button>
   </nav>
 
   <div id="toast" class="toast" hidden></div>
-  <div id="loader" class="loader" hidden><div class="spinner"></div><span id="loaderText">Chargement…</span></div>
+  <div id="loader" class="loader" hidden>
+    <div class="loader-card">
+      <div class="loader-glow"></div>
+      <div class="loader-ring indeterminate">
+        <svg viewBox="0 0 48 48">
+          <defs>
+            <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#0095f6"/>
+              <stop offset="50%" stop-color="#833ab4"/>
+              <stop offset="100%" stop-color="#ed4956"/>
+            </linearGradient>
+          </defs>
+          <circle cx="24" cy="24" r="20"/>
+          <circle cx="24" cy="24" r="20" class="loader-ring-fill"/>
+        </svg>
+        <span class="loader-pct" id="loaderPct"></span>
+      </div>
+      <span class="loader-text" id="loaderText">Chargement...</span>
+      <div class="loader-bar indeterminate" id="loaderBar"><div class="loader-bar-fill" id="loaderBarFill"></div></div>
+      <span class="loader-step" id="loaderStep"></span>
+    </div>
+  </div>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=17"></script>
 </body>
 </html>

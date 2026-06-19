@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -27,7 +29,7 @@ def generate(req: GenerateRequest, db: Session = Depends(get_db)):
             raise HTTPException(400, "Produit invalide pour cette marque")
 
     variations = ai_generator.generate_variations(
-        brand, req.prompt, req.format, req.variations
+        brand, req.prompt, req.format, req.variations, language=req.language
     )
 
     created: list[ContentItem] = []
@@ -68,8 +70,8 @@ def generate(req: GenerateRequest, db: Session = Depends(get_db)):
 
 @router.get("", response_model=list[ContentOut])
 def list_content(
-    brand_id: int | None = None,
-    status: ContentStatus | None = None,
+    brand_id: Optional[int] = None,
+    status: Optional[ContentStatus] = None,
     db: Session = Depends(get_db),
 ):
     q = db.query(ContentItem)
@@ -116,7 +118,8 @@ def render_content(
     item = _get(content_id, db)
     try:
         item.image_paths = composer.compose_content(
-            item.brand, item, use_ai_image=req.use_ai_image
+            item.brand, item, use_ai_image=req.use_ai_image,
+            quality=req.quality,
         )
         item.error = None
     except Exception as exc:  # noqa: BLE001

@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import init_db
-from app.routers import brands, content, products, schedule
+from app.routers import brands, content, instagram, products, schedule
 from app.services.scheduler import shutdown_scheduler, start_scheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -34,6 +34,7 @@ app.include_router(brands.router)
 app.include_router(products.router)
 app.include_router(content.router)
 app.include_router(schedule.router)
+app.include_router(instagram.router)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -45,10 +46,14 @@ def health():
         "text_ai": settings.has_text_ai,
         "image_ai": settings.has_image_ai,
         "instagram": settings.has_instagram,
+        "meta_oauth": settings.has_meta_oauth,
         "autopost": settings.autopost_enabled,
     }
 
 
 @app.get("/")
 def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )

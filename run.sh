@@ -42,5 +42,10 @@ echo "     (iPhone sur le MÊME Wi-Fi)"
 echo "============================================================"
 echo ""
 
-# 4. Lancement accessible sur le réseau local
+# 4. Cairo lib pour conversion SVG (logos) si installé via Homebrew
+for _dir in /opt/homebrew/lib /usr/local/lib; do
+  [ -f "$_dir/libcairo.2.dylib" ] && export DYLD_LIBRARY_PATH="${_dir}:${DYLD_LIBRARY_PATH:-}" && break
+done
+
+# 5. Lancement accessible sur le réseau local
 exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT"

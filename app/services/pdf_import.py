@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Union
 
 logger = logging.getLogger(__name__)
 
-MAX_CHARS = 20000  # on borne pour ne pas exploser le contexte de Claude
+MAX_CHARS = 20000
 
 
-def extract_text(pdf_path: str | Path) -> str:
+def extract_text(pdf_path: Union[str, Path]) -> str:
     try:
         from pypdf import PdfReader
     except ImportError:  # pragma: no cover

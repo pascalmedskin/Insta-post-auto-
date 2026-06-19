@@ -1,5 +1,7 @@
 """Publication Instagram via l'API Graph officielle (compte Business/Creator).
 
+Supporte les tokens par marque (OAuth) et le fallback vers .env global.
+
 Flux :
   POST simple    -> /media (image_url, caption) -> /media_publish
   CAROUSEL       -> N x /media (is_carousel_item) -> /media (CAROUSEL, children)
@@ -30,8 +32,15 @@ def _base() -> str:
     return f"https://graph.facebook.com/{settings.ig_graph_version}"
 
 
-def _ig_id() -> str:
-    return settings.ig_business_account_id
+def _get_credentials(content: ContentItem) -> tuple:
+    brand = content.brand
+    if brand and brand.ig_access_token and brand.ig_user_id:
+        return brand.ig_access_token, brand.ig_user_id
+    if settings.has_instagram:
+        return settings.ig_access_token, settings.ig_business_account_id
+    raise InstagramError(
+        "Instagram non configuré. Connecte ton compte dans l'identité de marque."
+    )
 
 
 def _media_url(rel_path: str) -> str:
@@ -42,8 +51,8 @@ def _media_url(rel_path: str) -> str:
     return f"{base}/{rel}"
 
 
-def _post(path: str, params: dict) -> dict:
-    params = {**params, "access_token": settings.ig_access_token}
+def _post(path: str, params: dict, access_token: str) -> dict:
+    params = {**params, "access_token": access_token}
     with httpx.Client(timeout=60) as client:
         resp = client.post(f"{_base()}/{path}", data=params)
     data = resp.json()
@@ -52,12 +61,12 @@ def _post(path: str, params: dict) -> dict:
     return data
 
 
-def _create_container(params: dict) -> str:
-    return _post(f"{_ig_id()}/media", params)["id"]
+def _create_container(ig_id: str, params: dict, access_token: str) -> str:
+    return _post(f"{ig_id}/media", params, access_token)["id"]
 
 
-def _publish(creation_id: str) -> str:
-    return _post(f"{_ig_id()}/media_publish", {"creation_id": creation_id})["id"]
+def _publish(ig_id: str, creation_id: str, access_token: str) -> str:
+    return _post(f"{ig_id}/media_publish", {"creation_id": creation_id}, access_token)["id"]
 
 
 def _full_caption(content: ContentItem) -> str:
@@ -69,10 +78,8 @@ def _full_caption(content: ContentItem) -> str:
 
 def publish_content(content: ContentItem) -> str:
     """Publie le contenu et renvoie l'ID média Instagram."""
-    if not settings.has_instagram:
-        raise InstagramError(
-            "Instagram non configuré (IG_ACCESS_TOKEN / IG_BUSINESS_ACCOUNT_ID)."
-        )
+    access_token, ig_id = _get_credentials(content)
+
     images = content.image_paths or []
     if not images:
         raise InstagramError("Aucun visuel à publier.")
@@ -81,27 +88,36 @@ def publish_content(content: ContentItem) -> str:
 
     if content.format == ContentFormat.STORY:
         cid = _create_container(
-            {"image_url": _media_url(images[0]), "media_type": "STORIES"}
+            ig_id,
+            {"image_url": _media_url(images[0]), "media_type": "STORIES"},
+            access_token,
         )
-        return _publish(cid)
+        return _publish(ig_id, cid, access_token)
 
     if content.format == ContentFormat.CAROUSEL and len(images) > 1:
         children = []
-        for path in images[:10]:  # IG limite à 10 slides
+        for path in images[:10]:
             children.append(
                 _create_container(
-                    {"image_url": _media_url(path), "is_carousel_item": "true"}
+                    ig_id,
+                    {"image_url": _media_url(path), "is_carousel_item": "true"},
+                    access_token,
                 )
             )
         carousel = _create_container(
+            ig_id,
             {
                 "media_type": "CAROUSEL",
                 "children": ",".join(children),
                 "caption": caption,
-            }
+            },
+            access_token,
         )
-        return _publish(carousel)
+        return _publish(ig_id, carousel, access_token)
 
-    # POST simple
-    cid = _create_container({"image_url": _media_url(images[0]), "caption": caption})
-    return _publish(cid)
+    cid = _create_container(
+        ig_id,
+        {"image_url": _media_url(images[0]), "caption": caption},
+        access_token,
+    )
+    return _publish(ig_id, cid, access_token)

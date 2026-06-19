@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from typing import Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -20,7 +21,7 @@ from app.services.instagram import publish_content
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 3
-_scheduler: BackgroundScheduler | None = None
+_scheduler: Optional[BackgroundScheduler] = None
 
 
 def _process_due_posts() -> None:

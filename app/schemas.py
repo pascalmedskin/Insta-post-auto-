@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,6 +17,10 @@ class BrandBase(BaseModel):
     secondary_color: str = "#FFFFFF"
     accent_color: str = "#FF4D6D"
     font_family: str = "DejaVu Sans"
+    font_body: str = ""
+    languages: Optional[list] = None
+    website_url: Optional[str] = None
+    products_url: Optional[str] = None
     guidelines: str = ""
     tone_of_voice: str = ""
     target_audience: str = ""
@@ -27,16 +32,20 @@ class BrandCreate(BrandBase):
 
 
 class BrandUpdate(BrandBase):
-    name: str | None = None
+    name: Optional[str] = None
 
 
 class BrandOut(BrandBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    logo_path: str | None = None
-    logos: list | None = None
-    brand_image_path: str | None = None
-    guidelines_pdf_path: str | None = None
+    website_url: Optional[str] = None
+    products_url: Optional[str] = None
+    logo_path: Optional[str] = None
+    logos: Optional[list] = None
+    brand_image_path: Optional[str] = None
+    guidelines_pdf_path: Optional[str] = None
+    ig_user_id: Optional[str] = None
+    ig_username: Optional[str] = None
     created_at: datetime
 
 
@@ -47,9 +56,13 @@ class ProductOut(BaseModel):
     brand_id: int
     name: str
     description: str
-    image_path: str | None = None
-    width_mm: float | None = None
-    height_mm: float | None = None
+    descriptions: Optional[dict] = None
+    product_url: Optional[str] = None
+    image_path: Optional[str] = None
+    images: Optional[list] = None
+    width_mm: Optional[float] = None
+    height_mm: Optional[float] = None
+    depth_mm: Optional[float] = None
     created_at: datetime
 
 
@@ -59,7 +72,8 @@ class GenerateRequest(BaseModel):
     prompt: str = Field(..., description="Sujet / brief du contenu à décliner")
     format: ContentFormat = ContentFormat.POST
     variations: int = Field(10, ge=1, le=30)
-    product_id: int | None = Field(
+    language: str = Field("fr", description="Langue de génération (code ISO)")
+    product_id: Optional[int] = Field(
         None, description="Produit à mettre en scène (mockup), optionnel"
     )
     # Étape 1 = hooks seuls (rapide) ; on génère l'image ensuite via /render.
@@ -75,6 +89,9 @@ class RenderRequest(BaseModel):
     use_ai_image: bool = Field(
         True, description="Générer une image IA comme fond (sinon image de marque)"
     )
+    quality: str = Field(
+        "draft", description="'draft' = rapide/moins cher, 'hd' = haute qualité"
+    )
 
 
 class SlideOut(BaseModel):
@@ -86,7 +103,7 @@ class ContentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     brand_id: int
-    product_id: int | None = None
+    product_id: Optional[int] = None
     format: ContentFormat
     status: ContentStatus
     prompt: str
@@ -94,19 +111,19 @@ class ContentOut(BaseModel):
     hook: str
     caption: str
     hashtags: str
-    slides: list | None = None
-    image_paths: list | None = None
-    ig_media_id: str | None = None
-    error: str | None = None
+    slides: Optional[list] = None
+    image_paths: Optional[list] = None
+    ig_media_id: Optional[str] = None
+    error: Optional[str] = None
     created_at: datetime
 
 
 class ContentUpdate(BaseModel):
-    hook: str | None = None
-    caption: str | None = None
-    hashtags: str | None = None
-    slides: list | None = None
-    status: ContentStatus | None = None
+    hook: Optional[str] = None
+    caption: Optional[str] = None
+    hashtags: Optional[str] = None
+    slides: Optional[list] = None
+    status: Optional[ContentStatus] = None
 
 
 # --- Scheduling ------------------------------------------------------------
@@ -127,5 +144,5 @@ class ScheduleOut(BaseModel):
     id: int
     content_id: int
     scheduled_at: datetime
-    published_at: datetime | None = None
+    published_at: Optional[datetime] = None
     attempts: int
