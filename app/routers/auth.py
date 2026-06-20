@@ -31,12 +31,14 @@ def _redirect_uri() -> str:
 def login_url():
     if not settings.has_meta_oauth:
         raise HTTPException(400, "META_APP_ID non configuré")
+    if not settings.meta_login_config_id:
+        raise HTTPException(400, "META_LOGIN_CONFIG_ID non configuré")
     params = {
         "client_id": settings.meta_app_id,
         "redirect_uri": _redirect_uri(),
         "response_type": "code",
         "state": "login",
-        "scope": "public_profile",
+        "config_id": settings.meta_login_config_id,
     }
     url = f"https://www.facebook.com/{settings.ig_graph_version}/dialog/oauth?{urlencode(params)}"
     return {"url": url}
