@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # Meta / Facebook OAuth (for Instagram connection)
     meta_app_id: str = ""
     meta_app_secret: str = ""
+    # Facebook Login for Business : ID de configuration de connexion.
+    # Requis pour les apps de type « Entreprise » (le scope seul ne suffit plus).
+    meta_login_config_id: str = ""
 
     # Scheduler
     scheduler_timezone: str = "Europe/Zurich"
