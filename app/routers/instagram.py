@@ -66,18 +66,31 @@ def callback(code: str, state: str = "0", db: Session = Depends(get_db)):
     try:
         short_token = _exchange_code(code)
         long_token = _exchange_long_lived(short_token)
-        page_token, page_id = _get_page_token(long_token)
-        ig_user_id, ig_username = _get_ig_account(page_id, page_token)
+        ig_pages = _get_all_ig_pages(long_token)
     except Exception as exc:
         logger.exception("Instagram OAuth failed")
         return HTMLResponse(_result_page(False, str(exc)), status_code=200)
 
-    brand.ig_access_token = page_token
-    brand.ig_user_id = ig_user_id
-    brand.ig_username = ig_username
-    db.commit()
+    if not ig_pages:
+        return HTMLResponse(
+            _result_page(False, "Aucune page Facebook avec un compte Instagram Business trouvée."),
+            status_code=200,
+        )
 
-    return HTMLResponse(_result_page(True, ig_username))
+    if len(ig_pages) == 1:
+        # Single page — auto-connect
+        p = ig_pages[0]
+        brand.ig_access_token = p["page_token"]
+        brand.ig_user_id = p["ig_user_id"]
+        brand.ig_username = p["ig_username"]
+        db.commit()
+        return HTMLResponse(_result_page(True, p["ig_username"]))
+
+    # Multiple pages — show selection UI
+    # Store long_token temporarily on the brand so select-page can use it
+    brand.ig_access_token = f"pending:{long_token}"
+    db.commit()
+    return HTMLResponse(_select_page(brand_id, ig_pages))
 
 
 @router.get("/status")
@@ -162,6 +175,39 @@ def disconnect(brand_id: int, user: User = Depends(get_current_user), db: Sessio
     return {"ok": True}
 
 
+@router.post("/select-page")
+def select_page(brand_id: int, page_id: str, db: Session = Depends(get_db)):
+    """User chose a specific page from the multi-page selection UI."""
+    brand = db.get(Brand, brand_id)
+    if not brand:
+        raise HTTPException(404, "Marque introuvable")
+
+    stored = brand.ig_access_token or ""
+    if not stored.startswith("pending:"):
+        raise HTTPException(400, "Pas de sélection en cours")
+
+    long_token = stored.replace("pending:", "", 1)
+
+    try:
+        ig_pages = _get_all_ig_pages(long_token)
+        chosen = next((p for p in ig_pages if p["page_id"] == page_id), None)
+        if not chosen:
+            raise HTTPException(400, "Page introuvable")
+
+        brand.ig_access_token = chosen["page_token"]
+        brand.ig_user_id = chosen["ig_user_id"]
+        brand.ig_username = chosen["ig_username"]
+        db.commit()
+        return {"ok": True, "username": chosen["ig_username"]}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Page selection failed")
+        brand.ig_access_token = ""
+        db.commit()
+        raise HTTPException(400, str(exc)) from exc
+
+
 # ── Meta Graph helpers ────────────────────────────────────────────────
 
 def _exchange_code(code: str) -> str:
@@ -209,6 +255,39 @@ def _get_page_token(user_token: str) -> tuple:
         "Aucune page Facebook n'est liée à un compte Instagram Business. "
         "Va dans les paramètres de ta page Facebook → Instagram → Connecte ton compte."
     )
+
+
+def _get_all_ig_pages(user_token: str) -> list[dict]:
+    """Return all Facebook Pages that have an Instagram Business account."""
+    resp = httpx.get(f"{_GRAPH}/me/accounts", params={
+        "access_token": user_token,
+        "fields": "id,name,access_token,instagram_business_account",
+    }, timeout=30)
+    data = resp.json()
+    pages = data.get("data", [])
+    results = []
+    for page in pages:
+        ig = page.get("instagram_business_account")
+        if ig:
+            ig_id = ig.get("id", "")
+            # Get username
+            try:
+                resp2 = httpx.get(f"{_GRAPH}/{ig_id}", params={
+                    "fields": "id,username",
+                    "access_token": page["access_token"],
+                }, timeout=30)
+                ig_data = resp2.json()
+                username = ig_data.get("username", "")
+            except Exception:
+                username = ""
+            results.append({
+                "page_id": page["id"],
+                "page_name": page.get("name", ""),
+                "page_token": page["access_token"],
+                "ig_user_id": ig_id,
+                "ig_username": username,
+            })
+    return results
 
 
 def _get_ig_account(page_id: str, page_token: str) -> tuple:
@@ -263,4 +342,59 @@ def _result_page(success: bool, detail: str) -> str:
   <p>{msg}</p>
   <a href="/">Retour à l'app</a>
   <script>if(window.opener){{window.opener.postMessage({{igConnected:{str(success).lower()}}}, '*');setTimeout(()=>window.close(),1500);}}</script>
+</div></body></html>"""
+
+
+def _select_page(brand_id: int, pages: list[dict]) -> str:
+    """HTML page letting the user pick which Instagram account to connect."""
+    items = ""
+    for p in pages:
+        page_name = p["page_name"].replace("'", "&#39;").replace('"', "&quot;")
+        ig_username = p["ig_username"].replace("'", "&#39;").replace('"', "&quot;")
+        items += f"""
+        <button class="page-option" onclick="selectPage('{p["page_id"]}')">
+          <div class="page-option-name">{page_name}</div>
+          <div class="page-option-ig">@{ig_username}</div>
+        </button>"""
+
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Choisir un compte</title>
+<style>
+  body {{ background:#000; color:#fff; font-family:-apple-system,system-ui,sans-serif;
+         display:flex; justify-content:center; align-items:center; min-height:100vh; margin:0; }}
+  .card {{ text-align:center; padding:40px 20px; max-width:400px; width:100%; }}
+  h1 {{ font-size:1.25rem; margin:0 0 8px; }}
+  p {{ color:#aaa; font-size:.875rem; margin:0 0 20px; }}
+  .page-option {{
+    display:block; width:100%; padding:16px; margin:8px 0;
+    background:#1a1a1a; border:1px solid #333; border-radius:12px;
+    cursor:pointer; text-align:left; color:#fff; font-family:inherit;
+    transition: border-color .15s;
+  }}
+  .page-option:hover {{ border-color:#0095f6; }}
+  .page-option-name {{ font-weight:600; font-size:.9375rem; margin-bottom:4px; }}
+  .page-option-ig {{ color:#0095f6; font-size:.8125rem; }}
+</style></head>
+<body><div class="card">
+  <h1>Choisir un compte Instagram</h1>
+  <p>Plusieurs pages Facebook sont liées à un compte Instagram. Choisis celle que tu veux utiliser :</p>
+  {items}
+  <script>
+    function selectPage(pageId) {{
+      fetch('/api/instagram/select-page?brand_id={brand_id}&page_id=' + pageId, {{method:'POST'}})
+        .then(r => r.json())
+        .then(data => {{
+          if (data.ok && window.opener) {{
+            window.opener.postMessage({{igConnected:true}}, '*');
+            setTimeout(() => window.close(), 800);
+          }} else if (data.ok) {{
+            window.location.href = '/';
+          }} else {{
+            alert(data.detail || 'Erreur');
+          }}
+        }})
+        .catch(err => alert(err.message));
+    }}
+  </script>
 </div></body></html>"""

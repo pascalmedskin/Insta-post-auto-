@@ -632,6 +632,11 @@ const esc = (s) =>
 async function renderHome() {
   if (!state.currentBrand) return renderOnboarding();
   const b = state.currentBrand;
+  let igStatus;
+  try {
+    igStatus = await getJSON(`/api/instagram/status?brand_id=${b.id}`);
+  } catch { igStatus = { connected: false }; }
+
   const [items, products] = await Promise.all([
     getJSON(`/api/content?brand_id=${b.id}`),
     getJSON(`/api/products?brand_id=${b.id}`),
@@ -670,7 +675,19 @@ async function renderHome() {
 
   const gridItems = allWithImages.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
+  const igBannerHTML = igStatus.connected
+    ? `<div class="ig-status-bar connected" id="igStatusBar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="5"/></svg>
+        <span>Publie sur <b>@${esc(igStatus.username)}</b></span>
+      </div>`
+    : `<div class="ig-status-bar disconnected" id="igStatusBar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="5"/></svg>
+        <span>Instagram non connecté</span>
+        <button class="ig-status-btn" id="igConnectHome">Connecter</button>
+      </div>`;
+
   view.innerHTML = `
+    ${igBannerHTML}
     <div class="home-stats">
       <div class="home-stat"><span class="home-stat-num">${items.length}</span><span class="home-stat-label">contenus</span></div>
       <div class="home-stat"><span class="home-stat-num">${products.length}</span><span class="home-stat-label">produits</span></div>
@@ -719,6 +736,8 @@ async function renderHome() {
   });
   const libBtn = $("#homeLib");
   if (libBtn) libBtn.onclick = () => { libSubTab = "drafts"; switchTab("library"); };
+  const igConnBtn = $("#igConnectHome");
+  if (igConnBtn) igConnBtn.onclick = () => switchTab("instagram");
 }
 
 // =====================================================================
@@ -1685,9 +1704,11 @@ function scheduleContent(it) {
 // =====================================================================
 async function renderSchedule() {
   if (!requireBrand()) return;
-  const [sched, items] = await Promise.all([
-    getJSON(`/api/schedule?brand_id=${state.currentBrand.id}`),
-    getJSON(`/api/content?brand_id=${state.currentBrand.id}`),
+  const b = state.currentBrand;
+  const [sched, items, igStatus] = await Promise.all([
+    getJSON(`/api/schedule?brand_id=${b.id}`),
+    getJSON(`/api/content?brand_id=${b.id}`),
+    getJSON(`/api/instagram/status?brand_id=${b.id}`).catch(() => ({ connected: false, username: "" })),
   ]);
 
   const contentMap = {};
@@ -1695,40 +1716,102 @@ async function renderSchedule() {
 
   const upcoming = sched.filter((s) => !s.published_at).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
   const published = sched.filter((s) => s.published_at).sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
-  const readyToSchedule = items.filter((it) => it.status === "approved" && !sched.find((s) => s.content_id === it.id) && (it.image_paths || []).length > 0);
+  const readyToSchedule = items.filter((it) => (it.status === "approved" || it.status === "draft") && !sched.find((s) => s.content_id === it.id) && (it.image_paths || []).length > 0);
 
-  const today = new Date().toISOString().slice(0, 10);
+  // Build calendar
+  const now = new Date();
+  const calYear = now.getFullYear();
+  const calMonth = now.getMonth();
+  const monthName = now.toLocaleString("fr-FR", { month: "long", year: "numeric" });
+  const firstDay = new Date(calYear, calMonth, 1);
+  const lastDay = new Date(calYear, calMonth + 1, 0);
+  const startWeekday = (firstDay.getDay() + 6) % 7; // Monday=0
+
+  // Map scheduled dates
+  const schedDates = {};
+  upcoming.forEach(s => {
+    const d = new Date(s.scheduled_at + "Z");
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    if (!schedDates[key]) schedDates[key] = [];
+    schedDates[key].push(s);
+  });
+
+  let calCells = "";
+  // Empty cells before first day
+  for (let i = 0; i < startWeekday; i++) calCells += `<div class="cal-cell empty"></div>`;
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const key = `${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const isToday = d === now.getDate() && calMonth === now.getMonth();
+    const hasPost = schedDates[key];
+    const count = hasPost ? hasPost.length : 0;
+    calCells += `<div class="cal-cell${isToday ? " today" : ""}${count ? " has-post" : ""}">
+      <span class="cal-day">${d}</span>
+      ${count ? `<div class="cal-dots">${count > 3 ? '<span class="cal-dot"></span><span class="cal-dot"></span><span class="cal-dot"></span>' : Array(count).fill('<span class="cal-dot"></span>').join("")}</div>` : ""}
+    </div>`;
+  }
+
   view.innerHTML = `
     <h2 class="section-title">Planning</h2>
 
-    ${readyToSchedule.length ? `
-    <div class="card">
-      <h3 style="margin-top:0">Contenus prêts à planifier</h3>
-      <p class="muted">${readyToSchedule.length} contenu(s) validé(s) en attente de programmation.</p>
-      <div class="row">
-        <div><label>Date de début</label><input type="date" id="asDate" value="${today}"></div>
-        <div><label>Heure</label><input type="time" id="asTime" value="09:00"></div>
+    <div class="sched-ig-bar ${igStatus.connected ? "connected" : "warn"}">
+      ${igStatus.connected
+        ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+           <span>Publications sur <b>@${esc(igStatus.username)}</b></span>`
+        : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+           <span>Instagram non connecté</span>
+           <button class="btn-ghost btn-sm" id="schedIgConnect">Connecter</button>`}
+    </div>
+
+    <div class="cal-card">
+      <div class="cal-title">${monthName.charAt(0).toUpperCase() + monthName.slice(1)}</div>
+      <div class="cal-grid">
+        <div class="cal-head">Lu</div><div class="cal-head">Ma</div><div class="cal-head">Me</div>
+        <div class="cal-head">Je</div><div class="cal-head">Ve</div><div class="cal-head">Sa</div><div class="cal-head">Di</div>
+        ${calCells}
       </div>
-      <label>Nombre de jours</label>
-      <input type="number" id="asDays" value="${Math.min(readyToSchedule.length, 7)}" min="1" max="90" inputmode="numeric">
-      <button class="btn-primary" id="autoSchedBtn" style="margin-top:14px">Programmer automatiquement</button>
+    </div>
+
+    ${readyToSchedule.length ? `
+    <div class="sched-auto-card">
+      <div class="sched-auto-info">
+        <span class="sched-auto-count">${readyToSchedule.length}</span>
+        <span>contenu(s) prêt(s) à planifier</span>
+      </div>
+      <div class="sched-auto-row">
+        <div style="flex:1"><label style="margin:0 0 4px">Heure</label><input type="time" id="asTime" value="09:00"></div>
+        <button class="btn-primary" id="autoSchedBtn" style="flex:2;margin-top:18px">Programmer 1/jour</button>
+      </div>
     </div>` : ""}
 
     ${upcoming.length ? `
-    <h3>A venir (${upcoming.length})</h3>
+    <h3 style="margin-top:20px">A venir</h3>
     <div class="schedule-timeline">
       ${upcoming.map((s) => scheduleCard(s, contentMap[s.content_id])).join("")}
-    </div>` : `<p class="empty" style="padding:20px 0">Aucune publication programmée.</p>`}
+    </div>` : ""}
 
     ${published.length ? `
-    <h3 style="margin-top:20px">Déjà publié (${published.length})</h3>
+    <h3 style="margin-top:20px">Publié</h3>
     <div class="schedule-timeline">
       ${published.map((s) => scheduleCard(s, contentMap[s.content_id], true)).join("")}
     </div>` : ""}
   `;
 
+  const igBtn = $("#schedIgConnect");
+  if (igBtn) igBtn.onclick = () => switchTab("instagram");
   const autoBtn = $("#autoSchedBtn");
-  if (autoBtn) autoBtn.onclick = autoSchedule;
+  if (autoBtn) autoBtn.onclick = async () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const body = {
+      brand_id: b.id,
+      start_date: tomorrow.toISOString().slice(0, 10) + "T00:00:00",
+      time_of_day: $("#asTime").value || "09:00",
+      days: readyToSchedule.length,
+    };
+    loader(true, "Programmation…");
+    try { const r = await postJSON("/api/schedule/auto", body); toast(`${r.length} publications programmées`, "ok"); render(); }
+    catch (e) { toast(e.message, "error"); } finally { loader(false); }
+  };
   sched.forEach((s) => {
     const b = $(`#unsched${s.id}`);
     if (b) b.onclick = () => unschedule(s.id);
@@ -1754,17 +1837,6 @@ function scheduleCard(s, content, isPublished = false) {
   </div>`;
 }
 
-async function autoSchedule() {
-  const body = {
-    brand_id: state.currentBrand.id,
-    start_date: $("#asDate").value + "T00:00:00",
-    time_of_day: $("#asTime").value,
-    days: parseInt($("#asDays").value) || 7,
-  };
-  loader(true, "Programmation…");
-  try { const r = await postJSON("/api/schedule/auto", body); toast(`${r.length} contenus programmés`, "ok"); render(); }
-  catch (e) { toast(e.message, "error"); } finally { loader(false); }
-}
 async function unschedule(id) { await del(`/api/schedule/${id}`); toast("Créneau annulé", "ok"); render(); }
 
 // =====================================================================
