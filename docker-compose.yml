@@ -2,16 +2,6 @@ services:
   web:
     build: .
     ports:
-      - "${PORT:-8000}:${PORT:-8000}"
+      - "3001:3001"
     environment:
-      - PORT=${PORT:-8000}
-    env_file:
-      - path: .env
-        required: false
-    volumes:
-      - app-data:/app/data
-      - app-media:/app/app/static/media
-
-volumes:
-  app-data:
-  app-media:
+      PORT: 3001
