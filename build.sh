@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== Creating venv ==="
-python3 -m venv .venv
-source .venv/bin/activate
+echo "=== Installing pip ==="
+python3 -m ensurepip --upgrade --break-system-packages
 
 echo "=== Installing Python dependencies ==="
-pip install --no-cache-dir -r requirements.txt
+python3 -m pip install --no-cache-dir --break-system-packages -r requirements.txt
 
 mkdir -p data app/static/media
 echo "=== Build complete ==="
