@@ -39,6 +39,7 @@ def login_url():
         "response_type": "code",
         "state": "login",
         "config_id": settings.meta_login_config_id,
+        "scope": "openid",
     }
     url = f"https://www.facebook.com/{settings.ig_graph_version}/dialog/oauth?{urlencode(params)}"
     return {"url": url}
