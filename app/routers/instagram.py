@@ -47,6 +47,7 @@ def auth_url(brand_id: int):
     # config_id qui porte les permissions. Sinon, fallback sur le scope classique.
     if settings.meta_login_config_id:
         params["config_id"] = settings.meta_login_config_id
+        params["scope"] = "openid"
     else:
         params["scope"] = _SCOPES
     url = f"https://www.facebook.com/{settings.ig_graph_version}/dialog/oauth?{urlencode(params)}"
