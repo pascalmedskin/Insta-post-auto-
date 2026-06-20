@@ -36,12 +36,8 @@ def login_url():
         "redirect_uri": _redirect_uri(),
         "response_type": "code",
         "state": "login",
+        "scope": "public_profile",
     }
-    if settings.meta_login_config_id:
-        params["config_id"] = settings.meta_login_config_id
-        params["scope"] = "openid"
-    else:
-        params["scope"] = "public_profile"
     url = f"https://www.facebook.com/{settings.ig_graph_version}/dialog/oauth?{urlencode(params)}"
     return {"url": url}
 
