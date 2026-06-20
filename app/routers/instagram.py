@@ -19,7 +19,8 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.models import Brand
+from app.dependencies import get_current_user, get_brand_for_user
+from app.models import Brand, User
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,8 @@ def _redirect_uri() -> str:
 
 
 @router.get("/auth-url")
-def auth_url(brand_id: int):
+def auth_url(brand_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    get_brand_for_user(brand_id, user, db)
     if not settings.has_meta_oauth:
         raise HTTPException(400, "META_APP_ID et META_APP_SECRET non configurés dans .env")
     params = {
@@ -79,10 +81,8 @@ def callback(code: str, state: str = "0", db: Session = Depends(get_db)):
 
 
 @router.get("/status")
-def status(brand_id: int, db: Session = Depends(get_db)):
-    brand = db.get(Brand, brand_id)
-    if not brand:
-        raise HTTPException(404, "Marque introuvable")
+def status(brand_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    brand = get_brand_for_user(brand_id, user, db)
     connected = bool(brand.ig_access_token and brand.ig_user_id)
     return {
         "connected": connected,
@@ -93,11 +93,9 @@ def status(brand_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/connect-token")
-def connect_token(brand_id: int, payload: dict, db: Session = Depends(get_db)):
+def connect_token(brand_id: int, payload: dict, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Connexion directe avec un access token collé par l'utilisateur."""
-    brand = db.get(Brand, brand_id)
-    if not brand:
-        raise HTTPException(404, "Marque introuvable")
+    brand = get_brand_for_user(brand_id, user, db)
     token = payload.get("token", "").strip()
     if not token:
         raise HTTPException(400, "Token manquant")
@@ -155,10 +153,8 @@ def save_app_config(payload: dict):
 
 
 @router.post("/disconnect")
-def disconnect(brand_id: int, db: Session = Depends(get_db)):
-    brand = db.get(Brand, brand_id)
-    if not brand:
-        raise HTTPException(404, "Marque introuvable")
+def disconnect(brand_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    brand = get_brand_for_user(brand_id, user, db)
     brand.ig_access_token = ""
     brand.ig_user_id = ""
     brand.ig_username = ""

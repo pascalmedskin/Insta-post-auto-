@@ -10,6 +10,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models import ContentFormat, ContentStatus
 
 
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    picture_url: Optional[str] = None
+
+
 # --- Brand -----------------------------------------------------------------
 class BrandBase(BaseModel):
     name: str

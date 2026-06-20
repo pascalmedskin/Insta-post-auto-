@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.config import MEDIA_DIR
 from app.database import get_db
-from app.models import Brand
+from app.dependencies import get_current_user, get_brand_for_user
+from app.models import Brand, User
 from app.schemas import BrandCreate, BrandOut, BrandUpdate
 from app.services.ai_generator import extract_brand_info
 from app.services.pdf_import import extract_text
@@ -22,13 +23,14 @@ router = APIRouter(prefix="/api/brands", tags=["brands"])
 
 
 @router.get("", response_model=list[BrandOut])
-def list_brands(db: Session = Depends(get_db)):
-    return db.query(Brand).order_by(Brand.created_at.desc()).all()
+def list_brands(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return db.query(Brand).filter(Brand.user_id == user.id).order_by(Brand.created_at.desc()).all()
 
 
 @router.post("", response_model=BrandOut)
-def create_brand(payload: BrandCreate, db: Session = Depends(get_db)):
+def create_brand(payload: BrandCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     brand = Brand(**payload.model_dump())
+    brand.user_id = user.id
     db.add(brand)
     db.commit()
     db.refresh(brand)
@@ -66,10 +68,11 @@ def setup_brand(
     name: str = Form(...),
     website_url: Optional[str] = Form(None),
     pdf: Optional[UploadFile] = File(None),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Crée une marque et extrait l'identité visuelle du PDF."""
-    brand = Brand(name=name, website_url=website_url or None)
+    brand = Brand(name=name, website_url=website_url or None, user_id=user.id)
     db.add(brand)
     db.flush()
 
@@ -86,12 +89,11 @@ def setup_update_brand(
     name: str = Form(...),
     website_url: Optional[str] = Form(None),
     pdf: Optional[UploadFile] = File(None),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Ré-analyse un PDF sur une marque existante."""
-    brand = db.get(Brand, brand_id)
-    if not brand:
-        raise HTTPException(404, "Marque introuvable")
+    brand = get_brand_for_user(brand_id, user, db)
 
     _analyze_brand_identity(brand, name, website_url, pdf, db)
 
@@ -100,21 +102,18 @@ def setup_update_brand(
     return brand
 
 
-def _get_brand(brand_id: int, db: Session) -> Brand:
-    brand = db.get(Brand, brand_id)
-    if not brand:
-        raise HTTPException(404, "Marque introuvable")
-    return brand
+def _get_brand(brand_id: int, user: User, db: Session) -> Brand:
+    return get_brand_for_user(brand_id, user, db)
 
 
 @router.get("/{brand_id}", response_model=BrandOut)
-def get_brand(brand_id: int, db: Session = Depends(get_db)):
-    return _get_brand(brand_id, db)
+def get_brand(brand_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return _get_brand(brand_id, user, db)
 
 
 @router.patch("/{brand_id}", response_model=BrandOut)
-def update_brand(brand_id: int, payload: BrandUpdate, db: Session = Depends(get_db)):
-    brand = _get_brand(brand_id, db)
+def update_brand(brand_id: int, payload: BrandUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    brand = _get_brand(brand_id, user, db)
     for key, value in payload.model_dump(exclude_unset=True).items():
         if value is not None:
             setattr(brand, key, value)
@@ -124,8 +123,8 @@ def update_brand(brand_id: int, payload: BrandUpdate, db: Session = Depends(get_
 
 
 @router.delete("/{brand_id}")
-def delete_brand(brand_id: int, db: Session = Depends(get_db)):
-    brand = _get_brand(brand_id, db)
+def delete_brand(brand_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    brand = _get_brand(brand_id, user, db)
     db.delete(brand)
     db.commit()
     return {"ok": True}
@@ -137,10 +136,11 @@ def upload_logos(
     files: list[UploadFile] = File(...),
     label: str = Form(""),
     variant: str = Form("primary"),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Ajoute un ou plusieurs logos avec label et variante."""
-    brand = _get_brand(brand_id, db)
+    brand = _get_brand(brand_id, user, db)
     logos = list(brand.logos or [])
 
     for f in files:
@@ -158,9 +158,9 @@ def upload_logos(
 
 @router.post("/{brand_id}/primary-logo", response_model=BrandOut)
 def set_primary_logo(
-    brand_id: int, path: str = Form(...), db: Session = Depends(get_db)
+    brand_id: int, path: str = Form(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    brand = _get_brand(brand_id, db)
+    brand = _get_brand(brand_id, user, db)
     all_paths = [
         (l["path"] if isinstance(l, dict) else l)
         for l in (brand.logos or [])
@@ -175,9 +175,9 @@ def set_primary_logo(
 
 @router.delete("/{brand_id}/logos/{logo_index}", response_model=BrandOut)
 def remove_logo(
-    brand_id: int, logo_index: int, db: Session = Depends(get_db)
+    brand_id: int, logo_index: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    brand = _get_brand(brand_id, db)
+    brand = _get_brand(brand_id, user, db)
     logos = list(brand.logos or [])
     if logo_index < 0 or logo_index >= len(logos):
         raise HTTPException(400, "Index invalide")
@@ -197,9 +197,9 @@ def remove_logo(
 
 @router.post("/{brand_id}/brand-image", response_model=BrandOut)
 def upload_brand_image(
-    brand_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)
+    brand_id: int, file: UploadFile = File(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    brand = _get_brand(brand_id, db)
+    brand = _get_brand(brand_id, user, db)
     brand.brand_image_path = save_upload(file, prefix="brandimg")
     db.commit()
     db.refresh(brand)
@@ -211,10 +211,11 @@ def upload_guidelines_pdf(
     brand_id: int,
     file: UploadFile = File(...),
     append: bool = Form(True),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Importe un PDF de guidelines : on extrait le texte vers `guidelines`."""
-    brand = _get_brand(brand_id, db)
+    brand = _get_brand(brand_id, user, db)
     rel = save_upload(file, prefix="guidelines")
     brand.guidelines_pdf_path = rel
     text = extract_text(MEDIA_DIR / rel.split("/")[-1])

@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Brand, ContentItem, ContentStatus, Product
+from app.dependencies import get_current_user, get_brand_for_user
+from app.models import Brand, ContentItem, ContentStatus, Product, User
 from app.schemas import ContentOut, ContentUpdate, GenerateRequest, RenderRequest
 from app.services import ai_generator, composer
 from app.services.instagram import InstagramError, publish_content
@@ -17,10 +18,8 @@ router = APIRouter(prefix="/api/content", tags=["content"])
 
 
 @router.post("/generate", response_model=list[ContentOut])
-def generate(req: GenerateRequest, db: Session = Depends(get_db)):
-    brand = db.get(Brand, req.brand_id)
-    if not brand:
-        raise HTTPException(404, "Marque introuvable")
+def generate(req: GenerateRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    brand = get_brand_for_user(req.brand_id, user, db)
 
     product = None
     if req.product_id:
@@ -72,9 +71,10 @@ def generate(req: GenerateRequest, db: Session = Depends(get_db)):
 def list_content(
     brand_id: Optional[int] = None,
     status: Optional[ContentStatus] = None,
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    q = db.query(ContentItem)
+    q = db.query(ContentItem).join(Brand).filter(Brand.user_id == user.id)
     if brand_id is not None:
         q = q.filter(ContentItem.brand_id == brand_id)
     if status is not None:
@@ -82,23 +82,24 @@ def list_content(
     return q.order_by(ContentItem.created_at.desc()).all()
 
 
-def _get(content_id: int, db: Session) -> ContentItem:
+def _get(content_id: int, user: User, db: Session) -> ContentItem:
     item = db.get(ContentItem, content_id)
     if not item:
         raise HTTPException(404, "Contenu introuvable")
+    get_brand_for_user(item.brand_id, user, db)
     return item
 
 
 @router.get("/{content_id}", response_model=ContentOut)
-def get_content(content_id: int, db: Session = Depends(get_db)):
-    return _get(content_id, db)
+def get_content(content_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return _get(content_id, user, db)
 
 
 @router.patch("/{content_id}", response_model=ContentOut)
 def update_content(
-    content_id: int, payload: ContentUpdate, db: Session = Depends(get_db)
+    content_id: int, payload: ContentUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    item = _get(content_id, db)
+    item = _get(content_id, user, db)
     for key, value in payload.model_dump(exclude_unset=True).items():
         if value is not None:
             setattr(item, key, value)
@@ -111,11 +112,12 @@ def update_content(
 def render_content(
     content_id: int,
     req: RenderRequest = RenderRequest(),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Génère l'image à partir du hook (étape 2). `use_ai_image` choisit
     une image IA ou l'image de marque comme fond."""
-    item = _get(content_id, db)
+    item = _get(content_id, user, db)
     try:
         item.image_paths = composer.compose_content(
             item.brand, item, use_ai_image=req.use_ai_image,
@@ -130,8 +132,8 @@ def render_content(
 
 
 @router.post("/{content_id}/publish", response_model=ContentOut)
-def publish_now(content_id: int, db: Session = Depends(get_db)):
-    item = _get(content_id, db)
+def publish_now(content_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    item = _get(content_id, user, db)
     try:
         item.ig_media_id = publish_content(item)
         item.status = ContentStatus.PUBLISHED
@@ -147,8 +149,8 @@ def publish_now(content_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{content_id}")
-def delete_content(content_id: int, db: Session = Depends(get_db)):
-    item = _get(content_id, db)
+def delete_content(content_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    item = _get(content_id, user, db)
     db.delete(item)
     db.commit()
     return {"ok": True}

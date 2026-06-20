@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 import logging
 
 from app.database import get_db
-from app.models import Brand, Product
+from app.dependencies import get_current_user, get_brand_for_user
+from app.models import Brand, Product, User
 from app.schemas import ProductOut
 from app.services.ai_generator import extract_single_product
 from app.services.storage import save_upload
@@ -22,8 +23,8 @@ router = APIRouter(prefix="/api/products", tags=["products"])
 
 
 @router.get("", response_model=list[ProductOut])
-def list_products(brand_id: Optional[int] = None, db: Session = Depends(get_db)):
-    q = db.query(Product)
+def list_products(brand_id: Optional[int] = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    q = db.query(Product).join(Brand).filter(Brand.user_id == user.id)
     if brand_id is not None:
         q = q.filter(Product.brand_id == brand_id)
     return q.order_by(Product.created_at.desc()).all()
@@ -38,10 +39,10 @@ def create_product(
     height_mm: Optional[float] = Form(None),
     depth_mm: Optional[float] = Form(None),
     file: Optional[UploadFile] = File(None),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if not db.get(Brand, brand_id):
-        raise HTTPException(404, "Marque introuvable")
+    get_brand_for_user(brand_id, user, db)
     img = save_upload(file, prefix="product") if file and file.filename else None
     product = Product(
         brand_id=brand_id,
@@ -67,11 +68,13 @@ def update_product(
     width_mm: Optional[float] = Form(None),
     height_mm: Optional[float] = Form(None),
     depth_mm: Optional[float] = Form(None),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     product = db.get(Product, product_id)
     if not product:
         raise HTTPException(404, "Produit introuvable")
+    get_brand_for_user(product.brand_id, user, db)
     if name is not None:
         product.name = name
     if description is not None:
@@ -92,12 +95,14 @@ def upload_product_images(
     product_id: int,
     label: str = Form(""),
     files: list[UploadFile] = File(...),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Ajoute une ou plusieurs photos/vues au produit."""
     product = db.get(Product, product_id)
     if not product:
         raise HTTPException(404, "Produit introuvable")
+    get_brand_for_user(product.brand_id, user, db)
     images = list(product.images or [])
     labels = ["Face", "Profil", "Dos", "Dessus", "Dessous", "Détail", "En situation"]
     for i, f in enumerate(files):
@@ -116,11 +121,13 @@ def upload_product_images(
 def set_primary_image(
     product_id: int,
     path: str = Form(...),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     product = db.get(Product, product_id)
     if not product:
         raise HTTPException(404, "Produit introuvable")
+    get_brand_for_user(product.brand_id, user, db)
     if not any(img["path"] == path for img in (product.images or [])):
         raise HTTPException(400, "Cette image n'appartient pas au produit")
     product.image_path = path
@@ -133,11 +140,13 @@ def set_primary_image(
 def remove_product_image(
     product_id: int,
     image_index: int,
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     product = db.get(Product, product_id)
     if not product:
         raise HTTPException(404, "Produit introuvable")
+    get_brand_for_user(product.brand_id, user, db)
     images = list(product.images or [])
     if image_index < 0 or image_index >= len(images):
         raise HTTPException(400, "Index invalide")
@@ -154,15 +163,14 @@ def remove_product_image(
 def create_product_from_url(
     brand_id: int = Form(...),
     url: str = Form(...),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Analyse une page produit : extrait nom, description, dimensions + images."""
-    if not db.get(Brand, brand_id):
-        raise HTTPException(404, "Marque introuvable")
+    brand = get_brand_for_user(brand_id, user, db)
     page_text = fetch_page_text(url)
     if not page_text:
         raise HTTPException(400, "Impossible de charger cette page")
-    brand = db.get(Brand, brand_id)
     langs = brand.languages or ["fr"]
     info = extract_single_product(page_text, brand.name, languages=langs)
     downloaded = scrape_all_product_images(url)
@@ -194,12 +202,14 @@ def create_product_from_url(
 def import_images_from_url(
     product_id: int,
     url: str = Form(...),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Scrape la page produit et importe toutes les images trouvées."""
     product = db.get(Product, product_id)
     if not product:
         raise HTTPException(404, "Produit introuvable")
+    get_brand_for_user(product.brand_id, user, db)
     product.product_url = url
     downloaded = scrape_all_product_images(url)
     if not downloaded:
@@ -220,10 +230,11 @@ def import_images_from_url(
 
 
 @router.delete("/{product_id}")
-def delete_product(product_id: int, db: Session = Depends(get_db)):
+def delete_product(product_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     product = db.get(Product, product_id)
     if not product:
         raise HTTPException(404, "Produit introuvable")
+    get_brand_for_user(product.brand_id, user, db)
     db.delete(product)
     db.commit()
     return {"ok": True}

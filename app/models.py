@@ -38,6 +38,25 @@ class ContentStatus(str, enum.Enum):
     FAILED = "failed"        # échec de publication
 
 
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    fb_user_id: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(300), default="")
+    picture_url: Mapped[Optional[str]] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    brands: Mapped[List["Brand"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    user: Mapped["User"] = relationship()
+
+
 class Brand(Base):
     __tablename__ = "brands"
 
@@ -67,6 +86,8 @@ class Brand(Base):
     ig_user_id: Mapped[Optional[str]] = mapped_column(String(120), default="")
     ig_username: Mapped[Optional[str]] = mapped_column(String(120), default="")
 
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     contents: Mapped[List[ContentItem]] = relationship(
@@ -75,6 +96,7 @@ class Brand(Base):
     products: Mapped[List[Product]] = relationship(
         back_populates="brand", cascade="all, delete-orphan"
     )
+    user: Mapped[Optional["User"]] = relationship(back_populates="brands")
 
 
 class Product(Base):

@@ -1034,3 +1034,67 @@ input[type=color] {
   content: ''; flex: 1; height: 1px; background: var(--border);
 }
 .ig-manual-card { background: var(--surface-2); border: 1px solid var(--border); }
+
+/* ---- Landing page ---- */
+.landing {
+  max-width: 420px; margin: 0 auto;
+  padding: 60px 20px 40px; text-align: center;
+  min-height: 100vh; display: flex; flex-direction: column;
+  justify-content: center;
+}
+.landing-hero { margin-bottom: 40px; }
+.landing-logo {
+  width: 88px; height: 88px; border-radius: 22px;
+  background: var(--surface-2); margin: 0 auto 20px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border);
+}
+.landing-title {
+  font-size: 1.75rem; font-weight: 800; margin: 0 0 10px;
+  letter-spacing: -.5px;
+}
+.landing-sub {
+  font-size: .9375rem; color: var(--text-secondary);
+  line-height: 1.55; margin: 0;
+}
+.landing-features {
+  text-align: left; margin-bottom: 36px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.landing-feat {
+  display: flex; align-items: flex-start; gap: 14px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px;
+}
+.landing-feat-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: rgba(0,149,246,.08); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.landing-feat-title {
+  font-size: .875rem; font-weight: 600; margin-bottom: 2px;
+}
+.landing-feat-desc {
+  font-size: .8125rem; color: var(--text-secondary); line-height: 1.4;
+}
+.landing-cta {
+  margin-bottom: 16px; padding: 14px 24px; font-size: 1rem;
+}
+.landing-footer {
+  font-size: .75rem; color: var(--muted); margin: 0;
+}
+
+/* ---- Topbar user avatar ---- */
+.topbar-avatar-btn {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--surface-3); border: 2px solid var(--border);
+  cursor: pointer; overflow: hidden;
+  background-size: cover; background-position: center;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text); font-weight: 700; font-size: .65rem;
+  padding: 0; flex-shrink: 0;
+}
+
+/* ---- Drawer logout ---- */
+.drawer-logout { color: var(--red) !important; }
+.drawer-logout svg { color: var(--red) !important; }

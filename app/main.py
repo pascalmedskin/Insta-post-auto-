@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import init_db
-from app.routers import brands, content, instagram, products, schedule
+from app.routers import auth, brands, content, instagram, products, schedule
 from app.services.scheduler import shutdown_scheduler, start_scheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -30,6 +30,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Insta Post Auto", version="0.1.0", lifespan=lifespan)
 
+app.include_router(auth.router)
 app.include_router(brands.router)
 app.include_router(products.router)
 app.include_router(content.router)

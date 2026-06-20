@@ -43,4 +43,5 @@ def init_db() -> None:
     with engine.connect() as conn:
         for col in ("ig_access_token", "ig_user_id", "ig_username"):
             _add_column_if_missing(conn, "brands", col, "VARCHAR(500) DEFAULT ''")
+        _add_column_if_missing(conn, "brands", "user_id", "INTEGER")
         conn.commit()

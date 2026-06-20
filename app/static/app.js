@@ -39,6 +39,7 @@ const LANG_LABELS = {
 };
 
 const state = { brands: [], products: [], currentBrand: null, tab: "home" };
+let currentUser = null;
 
 // ---- helpers réseau ----
 async function api(path, opts = {}) {
@@ -291,10 +292,19 @@ function openDrawer() {
     <button class="drawer-item" data-drawer="instagram">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none"/></svg>
       Instagram
+    </button>
+    <div class="drawer-sep"></div>
+    <button class="drawer-item drawer-logout" data-drawer="logout">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Déconnexion
     </button>`;
   nav.querySelectorAll(".drawer-item").forEach(item => {
     item.classList.toggle("active", item.dataset.drawer === state.tab);
-    item.onclick = () => { closeDrawer(); switchTab(item.dataset.drawer); };
+    item.onclick = () => {
+      closeDrawer();
+      if (item.dataset.drawer === "logout") { logout(); return; }
+      switchTab(item.dataset.drawer);
+    };
   });
   drawerOverlay.hidden = false;
   drawer.hidden = false;
@@ -383,8 +393,116 @@ function closeAccountDropdown() {
   $("#handleBtn").classList.remove("open");
 }
 
+function updateUserAvatar() {
+  const el = $("#userAvatar");
+  if (!el || !currentUser) return;
+  if (currentUser.picture_url) {
+    el.style.backgroundImage = `url(${currentUser.picture_url})`;
+    el.textContent = "";
+  } else {
+    el.textContent = (currentUser.name || "U").charAt(0).toUpperCase();
+  }
+}
+
+function renderLanding() {
+  document.querySelector(".topbar").hidden = true;
+  document.querySelector(".tabbar").hidden = true;
+  view.innerHTML = `
+    <div class="landing">
+      <div class="landing-hero">
+        <div class="landing-logo">
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="url(#igGrad)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+            <defs><linearGradient id="igGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#833ab4"/><stop offset="50%" stop-color="#fd1d1d"/><stop offset="100%" stop-color="#fcb045"/></linearGradient></defs>
+            <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="url(#igGrad)" stroke="none"/>
+          </svg>
+        </div>
+        <h1 class="landing-title">Insta Post Auto</h1>
+        <p class="landing-sub">Crée et planifie du contenu Instagram automatiquement pour ta marque, propulsé par l'IA.</p>
+      </div>
+
+      <div class="landing-features">
+        <div class="landing-feat">
+          <div class="landing-feat-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </div>
+          <div>
+            <div class="landing-feat-title">Hooks IA qui convertissent</div>
+            <div class="landing-feat-desc">Génère des dizaines de hooks percutants avec différents angles d'attaque.</div>
+          </div>
+        </div>
+        <div class="landing-feat">
+          <div class="landing-feat-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          </div>
+          <div>
+            <div class="landing-feat-title">Visuels générés par IA</div>
+            <div class="landing-feat-desc">Images uniques générées automatiquement, aux couleurs de ta marque.</div>
+          </div>
+        </div>
+        <div class="landing-feat">
+          <div class="landing-feat-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div>
+            <div class="landing-feat-title">Planification automatique</div>
+            <div class="landing-feat-desc">Programme tes publications à l'avance et publie automatiquement sur Instagram.</div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-ig landing-cta" id="landingLogin">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none"/></svg>
+        Se connecter avec Instagram
+      </button>
+
+      <p class="landing-footer">Gratuit. Propulsé par l'intelligence artificielle.</p>
+    </div>`;
+
+  $("#landingLogin").onclick = async () => {
+    try {
+      const { url } = await getJSON("/api/auth/login-url");
+      const popup = window.open(url, "auth_login", "width=600,height=700,scrollbars=yes");
+      window.addEventListener("message", async function onMsg(e) {
+        if (e.data && e.data.authSuccess !== undefined) {
+          window.removeEventListener("message", onMsg);
+          if (e.data.authSuccess) {
+            window.location.reload();
+          } else {
+            toast("Connexion échouée", "error");
+          }
+        }
+      });
+      const checkPopup = setInterval(() => {
+        if (popup && popup.closed) {
+          clearInterval(checkPopup);
+          setTimeout(() => window.location.reload(), 500);
+        }
+      }, 1000);
+    } catch (e) { toast(e.message, "error"); }
+  };
+}
+
+async function logout() {
+  try {
+    await api("/api/auth/logout", { method: "POST" });
+  } catch {}
+  currentUser = null;
+  window.location.reload();
+}
+
 // ---- bootstrap ----
 async function init() {
+  try {
+    currentUser = await getJSON("/api/auth/me");
+  } catch {
+    currentUser = null;
+  }
+
+  if (!currentUser) {
+    renderLanding();
+    return;
+  }
+
   document.querySelectorAll(".tab").forEach((b) =>
     b.addEventListener("click", () => switchTab(b.dataset.tab))
   );
@@ -406,6 +524,7 @@ async function init() {
   if (!state.currentBrand) {
     state.tab = "onboarding";
   }
+  updateUserAvatar();
   render();
 }
 
