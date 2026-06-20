@@ -1,8 +1,9 @@
 FROM python:3.12-slim
 
-# Polices DejaVu pour la composition de texte sur les visuels.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && apt-get install -y --no-install-recommends \
+       fonts-dejavu-core \
+       libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -12,7 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# La plupart des PaaS injectent $PORT ; défaut 8000 en local.
+RUN mkdir -p /app/data /app/app/static/media
+
 ENV PORT=8000
 EXPOSE 8000
 

@@ -10,5 +10,6 @@ httpx==0.28.1
 anthropic==0.42.0
 openai==1.59.6
 pillow==11.1.0
+cairosvg==2.7.1
 pypdf==5.1.0
 python-dotenv==1.0.1
