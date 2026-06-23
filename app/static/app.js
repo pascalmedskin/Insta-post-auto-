@@ -784,6 +784,7 @@ window.addEventListener("popstate", (e) => {
 });
 
 async function render() {
+  window.scrollTo(0, 0);
   const map = {
     onboarding: renderOnboarding,
     home: renderHome,
