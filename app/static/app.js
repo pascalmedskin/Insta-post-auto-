@@ -716,6 +716,24 @@ function urlBase64ToUint8Array(base64String) {
   return arr;
 }
 
+// ---- Swipe-from-left-edge to go back ----
+(function initSwipeBack() {
+  let startX = 0, startY = 0, swiping = false;
+  document.addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    if (t.clientX < 25) { startX = t.clientX; startY = t.clientY; swiping = true; }
+    else swiping = false;
+  }, { passive: true });
+  document.addEventListener("touchend", (e) => {
+    if (!swiping) return;
+    swiping = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startX;
+    const dy = Math.abs(t.clientY - startY);
+    if (dx > 80 && dy < 100) goBack();
+  }, { passive: true });
+})();
+
 async function smartNavigate() {
   if (!state.currentBrand) {
     switchTab("onboarding");
@@ -741,11 +759,29 @@ async function loadBrands() {
   updateHandle();
 }
 
+const _tabHistory = [];
 function switchTab(tab) {
+  if (state.tab && state.tab !== tab) _tabHistory.push(state.tab);
   state.tab = tab;
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  history.pushState({ tab }, "", null);
   render();
 }
+function goBack() {
+  const feed = document.querySelector(".feed-overlay.open");
+  if (feed) { feed.classList.remove("open"); setTimeout(() => feed.remove(), 200); return true; }
+  const sheet = document.querySelector(".feed-menu-sheet.open");
+  if (sheet) { sheet.classList.remove("open"); setTimeout(() => sheet.remove(), 200); return true; }
+  const lb = document.querySelector(".lightbox");
+  if (lb) { lb.remove(); return true; }
+  if (_tabHistory.length) { const prev = _tabHistory.pop(); state.tab = prev; document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === prev)); render(); return true; }
+  return false;
+}
+window.addEventListener("popstate", (e) => {
+  if (!goBack()) {
+    if (e.state && e.state.tab) { state.tab = e.state.tab; document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === state.tab)); render(); }
+  }
+});
 
 async function render() {
   const map = {
