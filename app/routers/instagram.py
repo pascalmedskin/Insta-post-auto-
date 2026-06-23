@@ -9,6 +9,7 @@ Flux :
 
 from __future__ import annotations
 
+import json
 import logging
 from urllib.parse import urlencode
 
@@ -428,7 +429,12 @@ def _result_page(success: bool, detail: str) -> str:
   <h1>{title}</h1>
   <p>{msg}</p>
   <a href="/">Retour à l'app</a>
-  <script>if(window.opener){{window.opener.postMessage({{igConnected:{str(success).lower()}}}, '*');setTimeout(()=>window.close(),1500);}}</script>
+  <script>
+    if(window.opener){{
+      window.opener.postMessage({{igConnected:{str(success).lower()}, igError:{json.dumps('' if success else detail)}}}, '*');
+      {'setTimeout(()=>window.close(),1500);' if success else '// Erreur : on ne ferme PAS le popup pour que le user puisse lire'}
+    }}
+  </script>
 </div></body></html>"""
 
 

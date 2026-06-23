@@ -1959,7 +1959,11 @@ async function renderInstagram() {
           if (e.data && e.data.igConnected !== undefined) {
             window.removeEventListener("message", onMsg);
             await loadBrands();
-            toast(e.data.igConnected ? "Instagram connecté !" : "Connexion échouée", e.data.igConnected ? "ok" : "error");
+            if (e.data.igConnected) {
+              toast("Instagram connecté !", "ok");
+            } else {
+              toast(e.data.igError || "Connexion échouée — lis le message dans le popup", "error");
+            }
             render();
           }
         });
