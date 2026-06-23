@@ -1163,6 +1163,28 @@ input[type=color] {
   width: 4px; height: 4px; border-radius: 50%;
   background: var(--accent);
 }
+.smart-sched-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px; margin-bottom: 16px;
+}
+.smart-sched-header {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px; font-weight: 600;
+}
+.smart-sched-badge {
+  margin-left: auto; font-size: .75rem; font-weight: 500;
+  background: var(--surface-3); color: var(--text-secondary);
+  padding: 2px 8px; border-radius: 20px;
+}
+.smart-sched-input {
+  width: 100%; background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 12px; font-size: .875rem; resize: vertical;
+  font-family: inherit; margin-bottom: 12px; min-height: 70px;
+}
+.smart-sched-input::placeholder { color: var(--muted); }
+.smart-sched-input:focus { border-color: var(--accent); outline: none; }
+
 .sched-auto-card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 16px; margin-bottom: 16px;

@@ -146,6 +146,11 @@ class AutoScheduleRequest(BaseModel):
     days: int = Field(7, ge=1, le=90, description="Nombre de jours à remplir")
 
 
+class SmartScheduleRequest(BaseModel):
+    brand_id: int
+    instruction: str = Field(..., description="Instruction en langage naturel pour le planning")
+
+
 class ScheduleOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

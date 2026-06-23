@@ -1772,6 +1772,16 @@ async function renderSchedule() {
     </div>
 
     ${readyToSchedule.length ? `
+    <div class="smart-sched-card">
+      <div class="smart-sched-header">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        <span>Planification IA</span>
+        <span class="smart-sched-badge">${readyToSchedule.length} contenu(s)</span>
+      </div>
+      <textarea id="smartInstruction" class="smart-sched-input" rows="3" placeholder="Ex : 1 story à 12h, 1 post à 8h et 1 carousel à 20h du lundi au vendredi"></textarea>
+      <button class="btn-primary" id="smartSchedBtn" style="width:100%">Planifier avec l'IA</button>
+    </div>
+
     <div class="sched-auto-card">
       <div class="sched-auto-info">
         <span class="sched-auto-count">${readyToSchedule.length}</span>
@@ -1798,6 +1808,22 @@ async function renderSchedule() {
 
   const igBtn = $("#schedIgConnect");
   if (igBtn) igBtn.onclick = () => switchTab("instagram");
+  const smartBtn = $("#smartSchedBtn");
+  if (smartBtn) smartBtn.onclick = async () => {
+    const instruction = $("#smartInstruction").value.trim();
+    if (!instruction) return toast("Décris comment tu veux planifier", "error");
+    loader(true, "Planification IA", [
+      { label: "Analyse de l'instruction…", duration: 3000 },
+      { label: "Distribution du contenu…", duration: 4000 },
+      { label: "Création des créneaux…", duration: 2000 },
+    ]);
+    try {
+      const result = await postJSON("/api/schedule/smart", { brand_id: b.id, instruction });
+      loaderDone();
+      toast(result.summary, "ok");
+      render();
+    } catch (e) { toast(e.message, "error"); loader(false); }
+  };
   const autoBtn = $("#autoSchedBtn");
   if (autoBtn) autoBtn.onclick = async () => {
     const tomorrow = new Date();
@@ -1910,7 +1936,20 @@ async function renderInstagram() {
 
         <button class="btn-ghost btn-sm" id="igShowManual" style="margin-top:20px;opacity:.5">Mode avancé (token manuel)</button>
         <div id="igManualSection" hidden></div>
+
+        <button class="btn-ghost btn-sm" id="igDebugBtn" style="margin-top:8px;opacity:.4;font-size:.75rem">Diagnostic connexion</button>
+        <pre id="igDebugOutput" style="display:none;text-align:left;font-size:.7rem;color:var(--muted);background:var(--surface-2);padding:12px;border-radius:8px;margin-top:8px;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow:auto"></pre>
       </div>`;
+
+    $("#igDebugBtn").onclick = async () => {
+      const out = $("#igDebugOutput");
+      out.style.display = "block";
+      out.textContent = "Chargement...";
+      try {
+        const data = await getJSON(`/api/instagram/debug?brand_id=${b.id}`);
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) { out.textContent = "Erreur: " + e.message; }
+    };
 
     $("#igOAuth").onclick = async () => {
       try {

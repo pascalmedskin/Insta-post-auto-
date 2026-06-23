@@ -66,16 +66,29 @@ def callback(code: str, state: str = "0", db: Session = Depends(get_db)):
     try:
         short_token = _exchange_code(code)
         long_token = _exchange_long_lived(short_token)
+    except Exception as exc:
+        logger.exception("Instagram OAuth token exchange failed")
+        return HTMLResponse(_result_page(False, f"Échange de token échoué : {exc}"), status_code=200)
+
+    try:
         ig_pages = _get_all_ig_pages(long_token)
     except Exception as exc:
-        logger.exception("Instagram OAuth failed")
-        return HTMLResponse(_result_page(False, str(exc)), status_code=200)
+        logger.exception("Instagram page discovery failed")
+        return HTMLResponse(_result_page(False, f"Erreur lors de la recherche des pages : {exc}"), status_code=200)
 
     if not ig_pages:
-        return HTMLResponse(
-            _result_page(False, "Aucune page Facebook avec un compte Instagram Business trouvée."),
-            status_code=200,
-        )
+        all_pages = _get_all_pages_debug(long_token)
+        if not all_pages:
+            detail = "Aucune Page Facebook trouvée sur ton compte. Crée une Page Facebook d'abord."
+        else:
+            page_names = ", ".join(p["name"] for p in all_pages[:5])
+            detail = (
+                f"Pages Facebook trouvées : {page_names}. "
+                "Mais aucune n'a de compte Instagram Business lié. "
+                "Va dans les paramètres de ta Page Facebook → Comptes liés → Instagram "
+                "et connecte ton compte Instagram Business."
+            )
+        return HTMLResponse(_result_page(False, detail), status_code=200)
 
     if len(ig_pages) == 1:
         # Single page — auto-connect
@@ -165,6 +178,61 @@ def save_app_config(payload: dict):
     return {"ok": True}
 
 
+@router.get("/debug")
+def debug_connection(brand_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Diagnostic complet de la connexion Instagram — montre chaque étape."""
+    brand = get_brand_for_user(brand_id, user, db)
+    result = {
+        "brand_id": brand.id,
+        "brand_name": brand.name,
+        "public_base_url": settings.public_base_url,
+        "ig_graph_version": settings.ig_graph_version,
+        "meta_app_id": settings.meta_app_id[:6] + "..." if settings.meta_app_id else "(vide)",
+        "meta_app_secret": "***" if settings.meta_app_secret else "(vide)",
+        "meta_login_config_id": settings.meta_login_config_id or "(vide)",
+        "redirect_uri_auth": f"{settings.public_base_url.rstrip('/')}/api/auth/callback",
+        "redirect_uri_instagram": _redirect_uri(),
+        "stored_ig_user_id": brand.ig_user_id or "(vide)",
+        "stored_ig_username": brand.ig_username or "(vide)",
+        "stored_token_status": "pending" if (brand.ig_access_token or "").startswith("pending:") else ("set" if brand.ig_access_token else "vide"),
+    }
+
+    if brand.ig_access_token and not brand.ig_access_token.startswith("pending:"):
+        try:
+            resp = httpx.get(f"{_GRAPH}/me", params={
+                "access_token": brand.ig_access_token,
+                "fields": "id,name",
+            }, timeout=10)
+            data = resp.json()
+            if "error" in data:
+                result["token_test"] = f"INVALIDE: {data['error'].get('message', '')}"
+            else:
+                result["token_test"] = f"OK (page: {data.get('name', data.get('id', '?'))})"
+        except Exception as e:
+            result["token_test"] = f"ERREUR: {e}"
+
+        if brand.ig_user_id:
+            try:
+                resp2 = httpx.get(f"{_GRAPH}/{brand.ig_user_id}", params={
+                    "access_token": brand.ig_access_token,
+                    "fields": "id,username,followers_count",
+                }, timeout=10)
+                data2 = resp2.json()
+                if "error" in data2:
+                    result["ig_api_test"] = f"INVALIDE: {data2['error'].get('message', '')}"
+                else:
+                    result["ig_api_test"] = f"OK (@{data2.get('username', '?')}, {data2.get('followers_count', '?')} followers)"
+            except Exception as e:
+                result["ig_api_test"] = f"ERREUR: {e}"
+
+    result["note"] = (
+        "IMPORTANT: Les 2 redirect URIs ci-dessus doivent être dans les 'URI de redirection OAuth valides' "
+        "de ton app Meta (developers.facebook.com → Ton app → Facebook Login → Paramètres)."
+    )
+
+    return result
+
+
 @router.post("/disconnect")
 def disconnect(brand_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     brand = get_brand_for_user(brand_id, user, db)
@@ -242,19 +310,35 @@ def _get_page_token(user_token: str) -> tuple:
         "fields": "id,name,access_token,instagram_business_account",
     }, timeout=30)
     data = resp.json()
+    if "error" in data:
+        raise RuntimeError(f"Erreur API Facebook : {data['error'].get('message', str(data['error']))}")
     pages = data.get("data", [])
     if not pages:
-        raise RuntimeError("Aucune page Facebook trouvée. Lie une Page Facebook à ton compte Instagram Business.")
+        raise RuntimeError("Aucune page Facebook trouvée. Vérifie que ton token a la permission pages_show_list.")
 
+    page_names = [p.get("name", "?") for p in pages]
     for page in pages:
         ig = page.get("instagram_business_account")
         if ig:
             return page["access_token"], page["id"]
 
     raise RuntimeError(
-        "Aucune page Facebook n'est liée à un compte Instagram Business. "
-        "Va dans les paramètres de ta page Facebook → Instagram → Connecte ton compte."
+        f"Pages trouvées ({', '.join(page_names)}) mais aucune n'a de compte Instagram Business lié. "
+        "Va dans les paramètres de ta Page Facebook → Comptes liés → Instagram."
     )
+
+
+def _get_all_pages_debug(user_token: str) -> list[dict]:
+    """Return all Facebook Pages (even those without IG) for debug."""
+    try:
+        resp = httpx.get(f"{_GRAPH}/me/accounts", params={
+            "access_token": user_token,
+            "fields": "id,name",
+        }, timeout=30)
+        data = resp.json()
+        return data.get("data", [])
+    except Exception:
+        return []
 
 
 def _get_all_ig_pages(user_token: str) -> list[dict]:
@@ -264,7 +348,10 @@ def _get_all_ig_pages(user_token: str) -> list[dict]:
         "fields": "id,name,access_token,instagram_business_account",
     }, timeout=30)
     data = resp.json()
+    if "error" in data:
+        raise RuntimeError(f"API Facebook /me/accounts : {data['error'].get('message', str(data['error']))}")
     pages = data.get("data", [])
+    logger.info("Facebook /me/accounts returned %d pages", len(pages))
     results = []
     for page in pages:
         ig = page.get("instagram_business_account")
@@ -327,12 +414,12 @@ def _result_page(success: bool, detail: str) -> str:
 <style>
   body {{ background:#000; color:#fff; font-family:-apple-system,system-ui,sans-serif;
          display:flex; justify-content:center; align-items:center; min-height:100vh; margin:0; }}
-  .card {{ text-align:center; padding:40px; max-width:400px; }}
+  .card {{ text-align:center; padding:40px 20px; max-width:500px; }}
   .icon {{ width:64px; height:64px; border-radius:50%; background:{color}; color:#fff;
            display:flex; align-items:center; justify-content:center; font-size:32px;
            margin:0 auto 20px; }}
   h1 {{ font-size:1.25rem; margin:0 0 8px; }}
-  p {{ color:#aaa; font-size:.875rem; margin:0 0 24px; }}
+  p {{ color:#aaa; font-size:.875rem; margin:0 0 24px; line-height:1.5; text-align:left; }}
   a {{ display:inline-block; padding:12px 32px; background:#0095f6; color:#fff;
        border-radius:8px; text-decoration:none; font-weight:600; }}
 </style></head>
