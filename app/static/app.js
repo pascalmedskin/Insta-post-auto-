@@ -691,20 +691,51 @@ async function init() {
 }
 
 // ---- PWA Push Notifications ----
+let _pushReady = false;
 async function registerPush() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
   try {
-    const reg = await navigator.serviceWorker.register("/sw.js");
+    await navigator.serviceWorker.register("/sw.js");
+    const reg = await navigator.serviceWorker.ready;
     const existing = await reg.pushManager.getSubscription();
-    if (existing) return;
+    _pushReady = !!existing;
+  } catch (e) { console.warn("SW registration failed:", e); }
+}
+
+async function enablePushNotifications() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    toast("Notifications non supportées sur ce navigateur", "error");
+    return false;
+  }
+  try {
     const permission = await Notification.requestPermission();
-    if (permission !== "granted") return;
+    if (permission !== "granted") {
+      toast("Permission refusée — active-la dans les réglages", "error");
+      return false;
+    }
+    const reg = await navigator.serviceWorker.ready;
     const resp = await getJSON("/api/push/vapid-key");
     const appServerKey = urlBase64ToUint8Array(resp.public_key);
     const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appServerKey });
     const subJson = sub.toJSON();
     await postJSON("/api/push/subscribe", { endpoint: subJson.endpoint, keys: subJson.keys });
-  } catch (e) { console.warn("Push registration failed:", e); }
+    _pushReady = true;
+    toast("Notifications activées", "ok");
+    return true;
+  } catch (e) {
+    console.warn("Push subscription failed:", e);
+    toast("Erreur lors de l'activation des notifications", "error");
+    return false;
+  }
+}
+
+function pushBannerHTML() {
+  if (_pushReady || !("PushManager" in window)) return "";
+  return `<div class="push-banner" id="pushBanner">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+    <span>Active les notifications pour recevoir tes rappels</span>
+    <button class="push-banner-btn" id="pushEnableBtn">Activer</button>
+  </div>`;
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -913,6 +944,7 @@ async function renderHome() {
 
   view.innerHTML = `
     ${igBannerHTML}
+    ${pushBannerHTML()}
     <div class="home-stats">
       <div class="home-stat"><span class="home-stat-num">${readyItems.length}</span><span class="home-stat-label">prêts</span></div>
       <div class="home-stat"><span class="home-stat-num">${publishedItems.length}</span><span class="home-stat-label">publiés</span></div>
@@ -977,6 +1009,11 @@ async function renderHome() {
   renderGrid();
   const igConnBtn = $("#igConnectHome");
   if (igConnBtn) igConnBtn.onclick = () => switchTab("instagram");
+  const pushBtn = $("#pushEnableBtn");
+  if (pushBtn) pushBtn.onclick = async () => {
+    const ok = await enablePushNotifications();
+    if (ok) { const banner = $("#pushBanner"); if (banner) banner.remove(); }
+  };
 }
 
 // =====================================================================

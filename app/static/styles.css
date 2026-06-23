@@ -1263,6 +1263,20 @@ input[type=color] {
 .drawer-logout svg { color: var(--red) !important; }
 
 /* ---- Instagram status bar ---- */
+/* ---- Push notification banner ---- */
+.push-banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: var(--radius-sm);
+  font-size: .8125rem; margin-bottom: 8px;
+  background: rgba(253,203,110,.08); border: 1px solid rgba(253,203,110,.2);
+}
+.push-banner span { flex: 1; color: var(--text-secondary); font-size: .75rem; }
+.push-banner-btn {
+  padding: 6px 14px; font-size: .75rem; font-weight: 600;
+  background: var(--orange); color: #000; border-radius: 6px;
+  cursor: pointer; white-space: nowrap;
+}
+
 .ig-status-bar {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 14px; border-radius: var(--radius-sm);
