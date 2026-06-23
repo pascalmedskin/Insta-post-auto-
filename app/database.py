@@ -44,4 +44,6 @@ def init_db() -> None:
         for col in ("ig_access_token", "ig_user_id", "ig_username"):
             _add_column_if_missing(conn, "brands", col, "VARCHAR(500) DEFAULT ''")
         _add_column_if_missing(conn, "brands", "user_id", "INTEGER")
+        _add_column_if_missing(conn, "content_items", "image_quality", "VARCHAR(10) DEFAULT 'draft'")
+        _add_column_if_missing(conn, "scheduled_posts", "publish_mode", "VARCHAR(20) DEFAULT 'auto'")
         conn.commit()

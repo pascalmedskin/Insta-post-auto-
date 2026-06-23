@@ -150,6 +150,7 @@ class ContentItem(Base):
 
     # Visuels : chemins relatifs dans static/media (1+ images)
     image_paths: Mapped[Optional[list]] = mapped_column(JSON, default=list)
+    image_quality: Mapped[str] = mapped_column(String(10), default="draft")
 
     ig_media_id: Mapped[Optional[str]] = mapped_column(String(120))
     error: Mapped[Optional[str]] = mapped_column(Text)
@@ -172,7 +173,18 @@ class ScheduledPost(Base):
     )
     # Heure de publication (UTC stocké, affiché dans le tz du scheduler)
     scheduled_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    publish_mode: Mapped[str] = mapped_column(String(20), default="auto")
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
 
     content: Mapped[ContentItem] = relationship(back_populates="schedule")
+
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    endpoint: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    p256dh: Mapped[str] = mapped_column(Text, default="")
+    auth: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)

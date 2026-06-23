@@ -123,6 +123,7 @@ def render_content(
             item.brand, item, use_ai_image=req.use_ai_image,
             quality=req.quality,
         )
+        item.image_quality = req.quality
         item.error = None
     except Exception as exc:  # noqa: BLE001
         item.error = f"Composition visuelle échouée: {exc}"

@@ -13,3 +13,4 @@ pillow==11.1.0
 cairosvg==2.7.1
 pypdf==5.1.0
 python-dotenv==1.0.1
+pywebpush==2.0.1

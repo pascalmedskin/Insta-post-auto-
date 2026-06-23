@@ -30,12 +30,13 @@ def _to_utc_naive(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
-def _attach(content: ContentItem, when_utc: datetime, db: Session) -> ScheduledPost:
+def _attach(content: ContentItem, when_utc: datetime, db: Session, publish_mode: str = "auto") -> ScheduledPost:
     if content.schedule:
         content.schedule.scheduled_at = when_utc
+        content.schedule.publish_mode = publish_mode
         sp = content.schedule
     else:
-        sp = ScheduledPost(content_id=content.id, scheduled_at=when_utc)
+        sp = ScheduledPost(content_id=content.id, scheduled_at=when_utc, publish_mode=publish_mode)
         db.add(sp)
     content.status = ContentStatus.SCHEDULED
     return sp
@@ -49,7 +50,7 @@ def schedule_one(req: ScheduleRequest, user: User = Depends(get_current_user), d
     get_brand_for_user(content.brand_id, user, db)
     if not content.image_paths:
         raise HTTPException(400, "Ce contenu n'a pas de visuel — fais un rendu d'abord.")
-    sp = _attach(content, _to_utc_naive(req.scheduled_at), db)
+    sp = _attach(content, _to_utc_naive(req.scheduled_at), db, publish_mode=req.publish_mode)
     db.commit()
     db.refresh(sp)
     return sp

@@ -1,4 +1,4 @@
-// ===== Insta Post Auto — front (vanilla JS, mobile-first) =====
+// ===== Magic Post — front (vanilla JS, mobile-first) =====
 const $ = (sel, el = document) => el.querySelector(sel);
 const view = $("#view");
 
@@ -233,6 +233,167 @@ function openLightbox(src, contentId) {
   document.body.appendChild(lb);
 }
 
+// ---- Feed view (Instagram-like full screen) ----
+function openFeedView(items, startId) {
+  const feed = document.createElement("div");
+  feed.className = "feed-overlay";
+  const startIdx = items.findIndex(it => it.id === startId);
+  const brand = state.currentBrand;
+  const brandName = brand ? brand.name : "";
+  const brandInitial = brandName.charAt(0).toUpperCase();
+  const brandLogo = brand ? getDarkLogo(brand) : null;
+
+  feed.innerHTML = `
+    <div class="feed-header">
+      <button class="feed-back" id="feedBack">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span class="feed-header-title">Publications</span>
+    </div>
+    <div class="feed-scroll" id="feedScroll">
+      ${items.map(it => {
+        const imgs = it.image_paths || [];
+        const mainImg = imgs[0] ? mediaUrl(imgs[0]) : "";
+        const isHd = it.image_quality === "hd";
+        const isCarousel = imgs.length > 1;
+        return `<div class="feed-post" data-fid="${it.id}">
+          <div class="feed-post-top">
+            <div class="feed-post-user">
+              <div class="feed-post-avatar"${brandLogo ? ` style="background-image:url(${mediaUrl(brandLogo)});background-size:cover"` : ""}>${brandLogo ? "" : brandInitial}</div>
+              <span class="feed-post-username">${esc(brandName)}</span>
+            </div>
+            <button class="feed-post-menu" data-fmenu="${it.id}">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+            </button>
+          </div>
+          <div class="feed-post-img-wrap">
+            ${isCarousel ? `<div class="feed-carousel" data-carousel="${it.id}">
+              ${imgs.map((img, i) => `<img src="${mediaUrl(img)}" class="feed-post-img" data-slide="${i}">`).join("")}
+            </div>
+            <div class="feed-carousel-dots">${imgs.map((_, i) => `<span class="feed-dot${i === 0 ? " active" : ""}" data-dot="${i}"></span>`).join("")}</div>` :
+            `<img src="${mainImg}" class="feed-post-img">`}
+            ${isHd ? `<span class="feed-hd-badge">HD</span>` : ""}
+          </div>
+          <div class="feed-post-body">
+            <div class="feed-post-hook">${esc(it.hook)}</div>
+            <div class="feed-post-caption">${esc(it.caption)}</div>
+            <div class="feed-post-hashtags">${esc(it.hashtags)}</div>
+            <div class="feed-post-meta">${statusLabel(it.status)} · ${it.format}</div>
+          </div>
+        </div>`;
+      }).join("")}
+    </div>`;
+
+  document.body.appendChild(feed);
+  requestAnimationFrame(() => feed.classList.add("open"));
+
+  const scrollEl = feed.querySelector("#feedScroll");
+  if (startIdx > 0) {
+    const target = scrollEl.querySelectorAll(".feed-post")[startIdx];
+    if (target) target.scrollIntoView({ behavior: "instant" });
+  }
+
+  // Carousel swipe
+  feed.querySelectorAll(".feed-carousel").forEach(car => {
+    let startX = 0, currentSlide = 0;
+    const slides = car.querySelectorAll("img");
+    const dots = car.parentElement.querySelector(".feed-carousel-dots");
+    const updateSlide = (idx) => {
+      currentSlide = Math.max(0, Math.min(idx, slides.length - 1));
+      car.style.transform = `translateX(-${currentSlide * 100}%)`;
+      if (dots) dots.querySelectorAll(".feed-dot").forEach((d, i) => d.classList.toggle("active", i === currentSlide));
+    };
+    car.addEventListener("touchstart", e => { startX = e.touches[0].clientX; });
+    car.addEventListener("touchend", e => {
+      const diff = startX - e.changedTouches[0].clientX;
+      if (Math.abs(diff) > 50) updateSlide(currentSlide + (diff > 0 ? 1 : -1));
+    });
+  });
+
+  feed.querySelector("#feedBack").onclick = () => { feed.classList.remove("open"); setTimeout(() => feed.remove(), 200); };
+  document.addEventListener("keydown", function esc(e) {
+    if (e.key === "Escape") { feed.classList.remove("open"); setTimeout(() => feed.remove(), 200); document.removeEventListener("keydown", esc); }
+  });
+
+  // Three dots menu
+  feed.querySelectorAll(".feed-post-menu").forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const cid = parseInt(btn.dataset.fmenu);
+      const it = items.find(x => x.id === cid);
+      if (!it) return;
+      openFeedMenu(it, feed);
+    };
+  });
+}
+
+function statusLabel(s) {
+  const m = { draft: "Brouillon", approved: "Validé", scheduled: "Planifié", published: "Publié", failed: "Échoué" };
+  return m[s] || s;
+}
+
+function openFeedMenu(it, feedEl) {
+  const existing = feedEl.querySelector(".feed-menu-sheet");
+  if (existing) existing.remove();
+
+  const sheet = document.createElement("div");
+  sheet.className = "feed-menu-sheet";
+  const actions = [];
+  if (it.status === "approved" || it.status === "draft") actions.push({ key: "edit", label: "Modifier", icon: "M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" });
+  if (it.status === "approved") actions.push({ key: "schedule", label: "Planifier", icon: "M12 6v6l4 2M22 12A10 10 0 112 12a10 10 0 0120 0z" });
+  if (it.status === "approved") actions.push({ key: "publish", label: "Publier maintenant", icon: "M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" });
+  if (it.image_quality !== "hd" && (it.image_paths || []).length) actions.push({ key: "upscale", label: "Upscale HD", icon: "M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" });
+  actions.push({ key: "download", label: "Télécharger", icon: "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" });
+  actions.push({ key: "delete", label: "Supprimer", icon: "M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2", danger: true });
+
+  sheet.innerHTML = `
+    <div class="feed-menu-overlay"></div>
+    <div class="feed-menu-card">
+      ${actions.map(a => `<button class="feed-menu-item${a.danger ? " danger" : ""}" data-faction="${a.key}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="${a.icon}"/></svg>
+        ${a.label}
+      </button>`).join("")}
+      <button class="feed-menu-item cancel" data-faction="cancel">Annuler</button>
+    </div>`;
+
+  feedEl.appendChild(sheet);
+  requestAnimationFrame(() => sheet.classList.add("open"));
+
+  const close = () => { sheet.classList.remove("open"); setTimeout(() => sheet.remove(), 200); };
+  sheet.querySelector(".feed-menu-overlay").onclick = close;
+  sheet.querySelectorAll(".feed-menu-item").forEach(btn => {
+    btn.onclick = async () => {
+      const act = btn.dataset.faction;
+      close();
+      if (act === "cancel") return;
+      if (act === "delete") {
+        if (!(await confirmModal("Supprimer ce contenu ?"))) return;
+        loader(true, "Suppression…");
+        try { await del(`/api/content/${it.id}`); toast("Supprimé", "ok"); feedEl.remove(); render(); }
+        catch (err) { toast(err.message, "error"); } finally { loader(false); }
+      } else if (act === "edit") {
+        feedEl.remove();
+        libSubTab = it.status === "draft" ? "drafts" : "ready";
+        switchTab("library");
+        setTimeout(() => { const card = $(`#c${it.id}`); if (card) { card.scrollIntoView({ behavior: "smooth" }); editContent(it); } }, 300);
+      } else if (act === "schedule") {
+        feedEl.remove();
+        scheduleContent(it);
+      } else if (act === "publish") {
+        loader(true, "Publication Instagram…", [{ label: "Envoi en cours…", duration: 8000 }]);
+        try { await postJSON(`/api/content/${it.id}/publish`); loaderDone(); toast("Publié sur Instagram", "ok"); feedEl.remove(); render(); }
+        catch (err) { toast(err.message, "error"); loader(false); }
+      } else if (act === "upscale") {
+        feedEl.remove();
+        await upscaleContent(it.id);
+      } else if (act === "download") {
+        const img = (it.image_paths || [])[0];
+        if (img) { const a = document.createElement("a"); a.href = mediaUrl(img); a.download = img.split("/").pop(); a.click(); }
+      }
+    };
+  });
+}
+
 async function upscaleContent(contentId) {
   loader(true, "Upscale HD", [
     { label: "Envoi de la demande...", duration: 2000 },
@@ -333,7 +494,7 @@ function updateHandle() {
   if (!b) {
     avatar.textContent = "";
     avatar.style.backgroundImage = "";
-    name.textContent = "Insta Post Auto";
+    name.textContent = "Magic Post";
     return;
   }
   const darkLogo = getDarkLogo(b);
@@ -416,7 +577,7 @@ function renderLanding() {
             <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="url(#igGrad)" stroke="none"/>
           </svg>
         </div>
-        <h1 class="landing-title">Insta Post Auto</h1>
+        <h1 class="landing-title">Magic Post</h1>
         <p class="landing-sub">Crée et planifie du contenu Instagram automatiquement pour ta marque, propulsé par l'IA.</p>
       </div>
 
@@ -526,6 +687,33 @@ async function init() {
   }
   updateUserAvatar();
   render();
+  registerPush();
+}
+
+// ---- PWA Push Notifications ----
+async function registerPush() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.register("/sw.js");
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) return;
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return;
+    const resp = await getJSON("/api/push/vapid-key");
+    const appServerKey = urlBase64ToUint8Array(resp.public_key);
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appServerKey });
+    const subJson = sub.toJSON();
+    await postJSON("/api/push/subscribe", { endpoint: subJson.endpoint, keys: subJson.keys });
+  } catch (e) { console.warn("Push registration failed:", e); }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
 }
 
 async function smartNavigate() {
@@ -580,7 +768,7 @@ function renderOnboarding() {
       <div class="onboarding-icon">
         <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none"/></svg>
       </div>
-      <h1 class="onboarding-title">Insta Post Auto</h1>
+      <h1 class="onboarding-title">Magic Post</h1>
       <p class="onboarding-sub">Crée et planifie du contenu Instagram automatiquement pour ta marque.</p>
       <div class="card" style="text-align:left">
         <label>Nom de la marque</label>
@@ -629,6 +817,8 @@ const esc = (s) =>
 // =====================================================================
 //  HOME (Instagram profile grid)
 // =====================================================================
+let homeSection = "ready"; // "ready" | "published"
+
 async function renderHome() {
   if (!state.currentBrand) return renderOnboarding();
   const b = state.currentBrand;
@@ -642,9 +832,9 @@ async function renderHome() {
     getJSON(`/api/products?brand_id=${b.id}`),
   ]);
   state.products = products;
-  const ready = items.filter(it => ["approved", "scheduled", "published"].includes(it.status));
+  const readyItems = items.filter(it => ["approved", "scheduled"].includes(it.status) && (it.image_paths || []).length > 0);
+  const publishedItems = items.filter(it => it.status === "published" && (it.image_paths || []).length > 0);
   const drafts = items.filter(it => it.status === "draft");
-  const allWithImages = items.filter(it => (it.image_paths || []).length > 0);
 
   if (!items.length && !products.length) {
     view.innerHTML = `
@@ -673,8 +863,6 @@ async function renderHome() {
     return;
   }
 
-  const gridItems = allWithImages.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
   const igBannerHTML = igStatus.connected
     ? `<div class="ig-status-bar connected" id="igStatusBar">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="5"/></svg>
@@ -689,53 +877,67 @@ async function renderHome() {
   view.innerHTML = `
     ${igBannerHTML}
     <div class="home-stats">
-      <div class="home-stat"><span class="home-stat-num">${items.length}</span><span class="home-stat-label">contenus</span></div>
-      <div class="home-stat"><span class="home-stat-num">${products.length}</span><span class="home-stat-label">produits</span></div>
-      <div class="home-stat"><span class="home-stat-num">${ready.length}</span><span class="home-stat-label">prêts</span></div>
+      <div class="home-stat"><span class="home-stat-num">${readyItems.length}</span><span class="home-stat-label">prêts</span></div>
+      <div class="home-stat"><span class="home-stat-num">${publishedItems.length}</span><span class="home-stat-label">publiés</span></div>
+      <div class="home-stat"><span class="home-stat-num">${drafts.length}</span><span class="home-stat-label">brouillons</span></div>
     </div>
-    ${drafts.length ? `<div style="padding:8px 16px"><span class="pill" style="background:var(--surface-2)">${drafts.length} brouillon(s) en attente</span></div>` : ""}
-    ${gridItems.length ? `
-      <div class="home-grid">
-        ${gridItems.map(it => {
-          const img = it.image_paths[0];
-          const isCarousel = it.format === "carousel" && it.image_paths.length > 1;
-          return `<div class="home-cell" data-cid="${it.id}">
-            <img src="${mediaUrl(img)}" loading="lazy">
-            <button class="home-cell-del" data-del-cid="${it.id}">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-            ${isCarousel ? `<div class="home-cell-badge">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff" stroke="none"><rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/></svg>
-            </div>` : ""}
-          </div>`;
-        }).join("")}
-      </div>` : `
-      <div class="home-empty" style="padding:30px 20px">
-        <div class="home-empty-sub">Tes contenus n'ont pas encore de visuels. Génère les images depuis la bibliothèque.</div>
-        <button class="btn-ghost" id="homeLib">Voir les brouillons</button>
-      </div>`}`;
+    <div class="home-tabs">
+      <button class="home-tab${homeSection === "ready" ? " active" : ""}" data-hsec="ready">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      </button>
+      <button class="home-tab${homeSection === "published" ? " active" : ""}" data-hsec="published">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      </button>
+    </div>
+    <div id="homeGridWrap"></div>`;
 
-  view.querySelectorAll(".home-cell").forEach(cell => {
-    cell.onclick = (e) => {
-      if (e.target.closest(".home-cell-del")) return;
-      const img = cell.querySelector("img");
-      if (img) openLightbox(img.src, parseInt(cell.dataset.cid));
+  const renderGrid = () => {
+    const gridItems = homeSection === "ready" ? readyItems : publishedItems;
+    const gridWrap = $("#homeGridWrap");
+    if (!gridItems.length) {
+      gridWrap.innerHTML = `<div class="home-empty" style="padding:30px 20px">
+        <div class="home-empty-sub">${homeSection === "ready"
+          ? "Aucun contenu prêt. Valide des brouillons depuis la bibliothèque."
+          : "Aucune publication pour le moment."}</div>
+        ${homeSection === "ready" && drafts.length ? `<button class="btn-ghost" id="homeLib">Voir les ${drafts.length} brouillon(s)</button>` : ""}
+      </div>`;
+      const libBtn = $("#homeLib");
+      if (libBtn) libBtn.onclick = () => { libSubTab = "drafts"; switchTab("library"); };
+      return;
+    }
+    gridWrap.innerHTML = `<div class="home-grid">
+      ${gridItems.map(it => {
+        const img = it.image_paths[0];
+        const isCarousel = it.format === "carousel" && it.image_paths.length > 1;
+        const isHd = it.image_quality === "hd";
+        const isScheduled = it.status === "scheduled";
+        return `<div class="home-cell" data-cid="${it.id}">
+          <img src="${mediaUrl(img)}" loading="lazy">
+          ${isHd ? `<span class="home-cell-hd">HD</span>` : ""}
+          ${isCarousel ? `<div class="home-cell-badge">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff" stroke="none"><rect x="2" y="2" width="8" height="8" rx="1"/><rect x="14" y="2" width="8" height="8" rx="1"/><rect x="2" y="14" width="8" height="8" rx="1"/></svg>
+          </div>` : ""}
+          ${isScheduled ? `<span class="home-cell-sched">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </span>` : ""}
+        </div>`;
+      }).join("")}
+    </div>`;
+
+    gridWrap.querySelectorAll(".home-cell").forEach(cell => {
+      cell.onclick = () => openFeedView(gridItems, parseInt(cell.dataset.cid));
+    });
+  };
+
+  view.querySelectorAll(".home-tab").forEach(btn => {
+    btn.onclick = () => {
+      homeSection = btn.dataset.hsec;
+      view.querySelectorAll(".home-tab").forEach(b => b.classList.toggle("active", b.dataset.hsec === homeSection));
+      renderGrid();
     };
   });
-  view.querySelectorAll(".home-cell-del").forEach(btn => {
-    btn.onclick = async (e) => {
-      e.stopPropagation();
-      if (!(await confirmModal("Supprimer ce contenu ?"))) return;
-      loader(true, "Suppression…");
-      try {
-        await del(`/api/content/${btn.dataset.delCid}`);
-        toast("Supprimé", "ok");
-        render();
-      } catch (err) { toast(err.message, "error"); } finally { loader(false); }
-    };
-  });
-  const libBtn = $("#homeLib");
-  if (libBtn) libBtn.onclick = () => { libSubTab = "drafts"; switchTab("library"); };
+
+  renderGrid();
   const igConnBtn = $("#igConnectHome");
   if (igConnBtn) igConnBtn.onclick = () => switchTab("instagram");
 }
@@ -1629,9 +1831,15 @@ function bindContentCard(it) {
 
   on("approve", async () => {
     await patchJSON(`/api/content/${it.id}`, { status: "approved" });
-    toast("Contenu validé — disponible dans Prêts", "ok");
+    toast("Validé — upscale HD en cours…", "ok");
     libSubTab = "ready";
     render();
+    // Auto HD upscale in background
+    try {
+      await postJSON(`/api/content/${it.id}/render`, { use_ai_image: true, quality: "hd" });
+      toast("Image upscalée en HD", "ok");
+      if (state.tab === "library" || state.tab === "home") render();
+    } catch (e) { console.warn("Auto HD failed:", e.message); }
   });
   on("del", async () => { if (await confirmModal("Supprimer ce contenu ?")) { await del(`/api/content/${it.id}`); toast("Supprimé", "ok"); render(); } });
   on("render", async () => {
@@ -1687,14 +1895,39 @@ function scheduleContent(it) {
     <div class="card" style="margin-top:10px;background:var(--surface-2)">
       <label>Date et heure de publication</label>
       <input type="datetime-local" id="sched${it.id}" value="${dflt}">
+      <div class="sched-mode-toggle">
+        <button class="sched-mode active" data-mode="auto" id="schedModeAuto${it.id}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          Auto-post
+        </button>
+        <button class="sched-mode" data-mode="reminder" id="schedModeRemind${it.id}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+          Rappel
+        </button>
+      </div>
+      <div class="sched-mode-hint" id="schedHint${it.id}">Sera publié automatiquement sur Instagram</div>
       <div class="card-actions">
         <button class="btn-primary btn-sm" id="schedOk${it.id}">Programmer</button>
       </div>
     </div>`);
+  let publishMode = "auto";
+  const modeAuto = $(`#schedModeAuto${it.id}`);
+  const modeRemind = $(`#schedModeRemind${it.id}`);
+  const hint = $(`#schedHint${it.id}`);
+  const setMode = (mode) => {
+    publishMode = mode;
+    modeAuto.classList.toggle("active", mode === "auto");
+    modeRemind.classList.toggle("active", mode === "reminder");
+    hint.textContent = mode === "auto"
+      ? "Sera publié automatiquement sur Instagram"
+      : "Tu recevras un rappel pour poster manuellement (avec musique, etc.)";
+  };
+  modeAuto.onclick = () => setMode("auto");
+  modeRemind.onclick = () => setMode("reminder");
   $(`#schedOk${it.id}`).onclick = async () => {
     try {
-      await postJSON("/api/schedule", { content_id: it.id, scheduled_at: $(`#sched${it.id}`).value });
-      toast("Programmé", "ok"); render();
+      await postJSON("/api/schedule", { content_id: it.id, scheduled_at: $(`#sched${it.id}`).value, publish_mode: publishMode });
+      toast(publishMode === "auto" ? "Programmé (auto-post)" : "Rappel programmé", "ok"); render();
     } catch (e) { toast(e.message, "error"); }
   };
 }
@@ -1848,6 +2081,7 @@ function scheduleCard(s, content, isPublished = false) {
   const when = new Date(s.scheduled_at + "Z").toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   const imgs = content?.image_paths || [];
   const thumb = imgs.length ? `<img src="${mediaUrl(imgs[0])}" class="sched-thumb">` : `<div class="sched-thumb placeholder"></div>`;
+  const isReminder = s.publish_mode === "reminder";
 
   return `<div class="sched-card${isPublished ? " published" : ""}">
     ${thumb}
@@ -1856,7 +2090,9 @@ function scheduleCard(s, content, isPublished = false) {
       <div class="sched-hook">${esc(content?.hook || "Contenu #" + s.content_id)}</div>
       <div style="display:flex;gap:4px;margin-top:4px">
         <span class="pill">${content?.format || "post"}</span>
-        ${isPublished ? `<span class="pill status-published">Publié</span>` : `<span class="pill status-scheduled">Programmé</span>`}
+        ${isPublished ? `<span class="pill status-published">Publié</span>`
+          : isReminder ? `<span class="pill" style="color:var(--orange)">Rappel</span>`
+          : `<span class="pill status-scheduled">Auto-post</span>`}
       </div>
     </div>
     ${!isPublished ? `<button class="btn-danger btn-sm sched-cancel" id="unsched${s.id}">Annuler</button>` : ""}

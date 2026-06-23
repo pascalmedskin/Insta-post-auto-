@@ -173,18 +173,27 @@ def _draw_multiline_centered(draw, text, font, y, w, max_width, fill=(255, 255, 
 
 
 def _overlay_gradient(base: Image.Image, opacity: int = 180) -> Image.Image:
+    """Full-image gradient: dark top (logo) → lighter middle (product) → dark bottom (text)."""
     w, h = base.size
     overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
     for y_pos in range(h):
         ratio = y_pos / h
-        if ratio < 0.10:
-            a = int(opacity * 0.6)
+        if ratio < 0.15:
+            # Top: dark for brand name / logo
+            progress = 1.0 - (ratio / 0.15)
+            a = int(opacity * (0.45 + 0.25 * progress))
         elif ratio < 0.40:
-            a = int(opacity * 0.25)
+            # Upper-mid: ease out to lighter zone
+            progress = (ratio - 0.15) / 0.25
+            a = int(opacity * (0.45 - 0.15 * progress))
+        elif ratio < 0.55:
+            # Center: lightest zone to show product
+            a = int(opacity * 0.30)
         else:
-            progress = (ratio - 0.40) / 0.60
-            a = int(opacity * 0.25 + opacity * 0.75 * (progress ** 0.8))
+            # Bottom half: smooth ramp up to dark for text
+            progress = (ratio - 0.55) / 0.45
+            a = int(opacity * (0.30 + 0.60 * (progress ** 0.7)))
         draw.line([(0, y_pos), (w, y_pos)], fill=(0, 0, 0, a))
     base_rgba = base.convert("RGBA")
     result = Image.alpha_composite(base_rgba, overlay)

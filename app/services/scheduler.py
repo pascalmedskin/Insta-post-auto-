@@ -41,6 +41,28 @@ def _process_due_posts() -> None:
             content = sp.content
             if not content or content.status == ContentStatus.PUBLISHED:
                 continue
+
+            if getattr(sp, "publish_mode", "auto") == "reminder":
+                content.status = ContentStatus.APPROVED
+                sp.published_at = now
+                logger.info("Rappel contenu #%s — prêt à poster manuellement", content.id)
+                db.commit()
+                try:
+                    from app.routers.push import send_push_to_user
+                    brand = content.brand
+                    user_id = brand.user_id if brand else None
+                    if user_id:
+                        send_push_to_user(
+                            user_id,
+                            title="Poste maintenant",
+                            body=f"{content.hook[:80]}",
+                            url="/",
+                            db_session=db,
+                        )
+                except Exception as exc:
+                    logger.warning("Push notification failed: %s", exc)
+                continue
+
             sp.attempts += 1
             try:
                 media_id = publish_content(content)

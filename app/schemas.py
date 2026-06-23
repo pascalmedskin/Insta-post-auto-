@@ -120,6 +120,7 @@ class ContentOut(BaseModel):
     hashtags: str
     slides: Optional[list] = None
     image_paths: Optional[list] = None
+    image_quality: str = "draft"
     ig_media_id: Optional[str] = None
     error: Optional[str] = None
     created_at: datetime
@@ -137,6 +138,7 @@ class ContentUpdate(BaseModel):
 class ScheduleRequest(BaseModel):
     content_id: int
     scheduled_at: datetime = Field(..., description="Date/heure (ISO 8601)")
+    publish_mode: str = Field("auto", description="'auto' = publication directe, 'reminder' = rappel pour poster manuellement")
 
 
 class AutoScheduleRequest(BaseModel):
@@ -156,5 +158,6 @@ class ScheduleOut(BaseModel):
     id: int
     content_id: int
     scheduled_at: datetime
+    publish_mode: str = "auto"
     published_at: Optional[datetime] = None
     attempts: int
