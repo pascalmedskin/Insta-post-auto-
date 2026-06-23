@@ -25,7 +25,6 @@ button { border: none; font-family: inherit; }
 
 html {
   height: -webkit-fill-available;
-  scroll-behavior: smooth;
 }
 
 body {
@@ -40,7 +39,6 @@ body {
   min-height: -webkit-fill-available;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
 }
 
 /* ---- Top bar (Instagram-style) ---- */
@@ -203,10 +201,7 @@ body {
 }
 
 /* ---- Views ---- */
-.view {
-  padding: 16px; max-width: 600px; margin: 0 auto;
-  -webkit-overflow-scrolling: touch;
-}
+.view { padding: 16px; max-width: 600px; margin: 0 auto; }
 h2.section-title { font-size: 1.1rem; font-weight: 700; margin: 0 0 16px; letter-spacing: -.2px; }
 h3 { font-size: .95rem; font-weight: 600; letter-spacing: -.1px; }
 .muted { color: var(--muted); font-size: .8125rem; line-height: 1.4; }
@@ -1034,7 +1029,6 @@ input[type=color] {
   -webkit-overflow-scrolling: touch;
   scroll-snap-type: y proximity;
   overscroll-behavior-y: contain;
-  scroll-behavior: smooth;
 }
 .feed-post {
   border-bottom: 1px solid var(--border); scroll-snap-align: start;
