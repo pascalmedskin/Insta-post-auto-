@@ -79,12 +79,19 @@ def callback(code: str, state: str = "0", db: Session = Depends(get_db)):
 
     if not ig_pages:
         all_pages = _get_all_pages_debug(long_token)
+        perms = _get_token_permissions(long_token)
+        perms_str = ", ".join(perms) if perms else "(aucune)"
         if not all_pages:
-            detail = "Aucune Page Facebook trouvée sur ton compte. Crée une Page Facebook d'abord."
+            detail = (
+                f"Aucune Page Facebook trouvée. "
+                f"Permissions du token : {perms_str}. "
+                "Si 'pages_show_list' manque, le problème vient de la config Facebook Login for Business."
+            )
         else:
             page_names = ", ".join(p["name"] for p in all_pages[:5])
             detail = (
                 f"Pages Facebook trouvées : {page_names}. "
+                f"Permissions du token : {perms_str}. "
                 "Mais aucune n'a de compte Instagram Business lié. "
                 "Va dans les paramètres de ta Page Facebook → Comptes liés → Instagram "
                 "et connecte ton compte Instagram Business."
@@ -327,6 +334,22 @@ def _get_page_token(user_token: str) -> tuple:
         f"Pages trouvées ({', '.join(page_names)}) mais aucune n'a de compte Instagram Business lié. "
         "Va dans les paramètres de ta Page Facebook → Comptes liés → Instagram."
     )
+
+
+def _get_token_permissions(user_token: str) -> list[str]:
+    """Check which permissions the token actually has."""
+    try:
+        resp = httpx.get(f"{_GRAPH}/me/permissions", params={
+            "access_token": user_token,
+        }, timeout=10)
+        data = resp.json()
+        if "error" in data:
+            logger.error("Permission check failed: %s", data["error"])
+            return [f"ERREUR: {data['error'].get('message', '?')}"]
+        perms = data.get("data", [])
+        return [p["permission"] for p in perms if p.get("status") == "granted"]
+    except Exception as e:
+        return [f"ERREUR: {e}"]
 
 
 def _get_all_pages_debug(user_token: str) -> list[dict]:
