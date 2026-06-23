@@ -71,31 +71,83 @@ def callback(code: str, state: str = "0", db: Session = Depends(get_db)):
         logger.exception("Instagram OAuth token exchange failed")
         return HTMLResponse(_result_page(False, f"Échange de token échoué : {exc}"), status_code=200)
 
+    # Debug: check who this token belongs to and what /me/accounts returns raw
     try:
-        ig_pages = _get_all_ig_pages(long_token)
+        me_resp = httpx.get(f"{_GRAPH}/me", params={
+            "access_token": long_token,
+            "fields": "id,name",
+        }, timeout=10)
+        me_data = me_resp.json()
+    except Exception:
+        me_data = {"error": "failed to call /me"}
+
+    try:
+        accounts_resp = httpx.get(f"{_GRAPH}/me/accounts", params={
+            "access_token": long_token,
+            "fields": "id,name,access_token,instagram_business_account",
+        }, timeout=30)
+        accounts_raw = accounts_resp.json()
     except Exception as exc:
-        logger.exception("Instagram page discovery failed")
-        return HTMLResponse(_result_page(False, f"Erreur lors de la recherche des pages : {exc}"), status_code=200)
+        logger.exception("Instagram /me/accounts failed")
+        return HTMLResponse(_result_page(False, f"Erreur /me/accounts : {exc}"), status_code=200)
+
+    # Also try with short token
+    try:
+        accounts_short_resp = httpx.get(f"{_GRAPH}/me/accounts", params={
+            "access_token": short_token,
+            "fields": "id,name,access_token,instagram_business_account",
+        }, timeout=30)
+        accounts_short_raw = accounts_short_resp.json()
+    except Exception:
+        accounts_short_raw = {"error": "failed"}
+
+    pages = accounts_raw.get("data", [])
+    ig_pages = []
+    for page in pages:
+        ig = page.get("instagram_business_account")
+        if ig:
+            ig_id = ig.get("id", "")
+            try:
+                resp2 = httpx.get(f"{_GRAPH}/{ig_id}", params={
+                    "fields": "id,username",
+                    "access_token": page["access_token"],
+                }, timeout=30)
+                ig_data = resp2.json()
+                username = ig_data.get("username", "")
+            except Exception:
+                username = ""
+            ig_pages.append({
+                "page_id": page["id"],
+                "page_name": page.get("name", ""),
+                "page_token": page["access_token"],
+                "ig_user_id": ig_id,
+                "ig_username": username,
+            })
 
     if not ig_pages:
-        all_pages = _get_all_pages_debug(long_token)
         perms = _get_token_permissions(long_token)
         perms_str = ", ".join(perms) if perms else "(aucune)"
-        if not all_pages:
-            detail = (
-                f"Aucune Page Facebook trouvée. "
-                f"Permissions du token : {perms_str}. "
-                "Si 'pages_show_list' manque, le problème vient de la config Facebook Login for Business."
+        pages_long = len(accounts_raw.get("data", []))
+        pages_short = len(accounts_short_raw.get("data", []))
+
+        detail = (
+            f"DEBUG — /me = {me_data.get('name', '?')} (id: {me_data.get('id', '?')}). "
+            f"Permissions : {perms_str}. "
+            f"/me/accounts (long token) : {pages_long} page(s). "
+            f"/me/accounts (short token) : {pages_short} page(s). "
+        )
+        if "error" in accounts_raw:
+            detail += f"Erreur API : {accounts_raw['error'].get('message', str(accounts_raw['error']))}. "
+        if pages_long == 0 and pages_short == 0:
+            detail += (
+                "Le token a les permissions mais Facebook ne retourne aucune page. "
+                "Vérifie que tu es admin/éditeur de tes Pages Facebook "
+                "et que l'app Meta est en mode Live (pas Development)."
             )
-        else:
-            page_names = ", ".join(p["name"] for p in all_pages[:5])
-            detail = (
-                f"Pages Facebook trouvées : {page_names}. "
-                f"Permissions du token : {perms_str}. "
-                "Mais aucune n'a de compte Instagram Business lié. "
-                "Va dans les paramètres de ta Page Facebook → Comptes liés → Instagram "
-                "et connecte ton compte Instagram Business."
-            )
+        elif pages_long > 0 or pages_short > 0:
+            all_names = [p.get("name", "?") for p in (accounts_raw if pages_long else accounts_short_raw).get("data", [])]
+            detail += f"Pages : {', '.join(all_names)}. Aucune n'a d'Instagram Business lié."
+
         return HTMLResponse(_result_page(False, detail), status_code=200)
 
     if len(ig_pages) == 1:
