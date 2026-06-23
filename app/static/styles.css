@@ -15,27 +15,44 @@
   --orange: #fdcb6e;
   --radius: 12px;
   --radius-sm: 8px;
+  --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --tabbar-h: 64px;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+button { border: none; font-family: inherit; }
+
+html {
+  height: -webkit-fill-available;
+  scroll-behavior: smooth;
+}
 
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
-  padding-bottom: calc(56px + var(--safe-bottom));
+  padding-top: calc(50px + var(--safe-top));
+  padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom));
   -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 /* ---- Top bar (Instagram-style) ---- */
 .topbar {
-  position: sticky; top: 0; z-index: 20;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 20;
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 10px 16px;
+  padding-top: calc(10px + var(--safe-top));
   background: var(--bg);
   border-bottom: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 .handle-btn {
   display: flex; align-items: center; gap: 8px;
@@ -68,7 +85,7 @@ body {
 
 /* Account dropdown */
 .account-dropdown {
-  position: fixed; top: 52px; left: 16px; right: 16px; z-index: 50;
+  position: fixed; top: calc(52px + var(--safe-top)); left: 16px; right: 16px; z-index: 50;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 8px 0;
   box-shadow: 0 8px 30px rgba(0,0,0,.5);
@@ -128,6 +145,7 @@ body {
 .drawer-header {
   display: flex; align-items: center; gap: 12px;
   padding: 20px 16px 16px;
+  padding-top: calc(20px + var(--safe-top));
   border-bottom: 1px solid var(--border);
 }
 .drawer-avatar {
@@ -185,7 +203,10 @@ body {
 }
 
 /* ---- Views ---- */
-.view { padding: 16px; max-width: 600px; margin: 0 auto; }
+.view {
+  padding: 16px; max-width: 600px; margin: 0 auto;
+  -webkit-overflow-scrolling: touch;
+}
 h2.section-title { font-size: 1.1rem; font-weight: 700; margin: 0 0 16px; letter-spacing: -.2px; }
 h3 { font-size: .95rem; font-weight: 600; letter-spacing: -.1px; }
 .muted { color: var(--muted); font-size: .8125rem; line-height: 1.4; }
@@ -567,26 +588,31 @@ input[type=color] {
 /* ---- Tab bar (Instagram-style bottom nav) ---- */
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-  display: flex; justify-content: space-around; align-items: center;
+  display: flex; justify-content: space-around; align-items: stretch;
   background: var(--bg);
   border-top: 1px solid var(--border);
-  padding: 6px 0 calc(6px + var(--safe-bottom));
-  height: 56px;
+  padding: 0 0 var(--safe-bottom);
+  height: calc(var(--tabbar-h) + var(--safe-bottom));
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 .tab {
-  background: none; color: var(--muted); font-size: .625rem;
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 4px 0; flex: 1; font-weight: 400;
+  background: none; border: none; color: var(--muted); font-size: .625rem;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  padding: 10px 0; flex: 1; font-weight: 400;
   transition: color .15s;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 48px;
 }
-.tab svg { width: 24px; height: 24px; }
-.tab span { font-size: .625rem; margin-top: 1px; }
+.tab svg { width: 26px; height: 26px; }
+.tab span { font-size: .6875rem; margin-top: 2px; }
 .tab.active { color: var(--text); }
 .tab.active svg { stroke-width: 2; }
 
 /* ---- Toast & loader ---- */
 .toast {
-  position: fixed; left: 50%; bottom: calc(70px + var(--safe-bottom));
+  position: fixed; left: 50%; bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 12px);
   transform: translateX(-50%); z-index: 50;
   background: var(--surface-2); border: 1px solid var(--border-light);
   padding: 10px 16px; border-radius: var(--radius-sm); max-width: 90%;
@@ -698,7 +724,7 @@ input[type=color] {
   border-radius: var(--radius-sm);
 }
 .lightbox .lb-close {
-  position: absolute; top: 16px; right: 16px;
+  position: absolute; top: calc(16px + var(--safe-top)); right: 16px;
   background: rgba(255,255,255,.1); border: none; color: #fff;
   width: 36px; height: 36px; border-radius: 50%; font-size: 1rem;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
@@ -992,8 +1018,11 @@ input[type=color] {
 .feed-overlay.open { transform: translateX(0); }
 .feed-header {
   display: flex; align-items: center; gap: 12px;
-  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  padding-top: calc(12px + var(--safe-top));
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  background: var(--bg);
 }
 .feed-back {
   background: none; border: none; color: #fff; cursor: pointer; padding: 0;
@@ -1001,8 +1030,11 @@ input[type=color] {
 }
 .feed-header-title { font-weight: 600; font-size: .9375rem; }
 .feed-scroll {
-  flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  flex: 1; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   scroll-snap-type: y proximity;
+  overscroll-behavior-y: contain;
+  scroll-behavior: smooth;
 }
 .feed-post {
   border-bottom: 1px solid var(--border); scroll-snap-align: start;
@@ -1067,7 +1099,7 @@ input[type=color] {
 .feed-menu-card {
   position: absolute; bottom: 0; left: 0; right: 0;
   background: var(--surface-2); border-radius: 16px 16px 0 0;
-  padding: 8px 0 env(safe-area-inset-bottom, 16px);
+  padding: 8px 0 calc(16px + var(--safe-bottom));
   transform: translateY(100%); transition: transform .25s ease;
 }
 .feed-menu-sheet.open .feed-menu-card { transform: translateY(0); }
