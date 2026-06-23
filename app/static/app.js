@@ -1797,7 +1797,6 @@ function contentCard(it, mode) {
       <button class="btn-danger btn-sm" data-act="del">Suppr.</button>
     </div>` : `
     <div class="card-actions">
-      ${hasImg ? `<button class="btn-ok btn-sm" data-act="upscale">Upscale HD</button>` : ""}
       <button class="btn-ghost btn-sm" data-act="edit">Éditer</button>
       <button class="btn-ghost btn-sm" data-act="schedule">Planifier</button>
       <button class="btn-primary btn-sm" data-act="publish">Publier</button>
